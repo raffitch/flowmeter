@@ -46,6 +46,7 @@ class FlowServer:
         self.cal_running  = False
         self.pulse_start  = 0
         self.t0           = 0.0
+        self.target_litres = 1.0
 
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
 
@@ -90,13 +91,19 @@ class FlowServer:
 
         try:
             async for text in ws:
-                cmd = text.strip().lower()
+                try:
+                    data = json.loads(text)
+                    cmd = data.get("cmd", "").lower()
+                except json.JSONDecodeError:
+                    data = {}
+                    cmd = text.strip().lower()
 
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
                     self.cal_running = True
                     self.pulse_start = self.latest_pulses
                     self.t0          = time.time()
+                    self.target_litres = float(data.get("volume", 1))
                     await ws.send(json.dumps({"type":"ack","status":"started"}))
 
                 # ---- stop calibration ----
@@ -104,11 +111,13 @@ class FlowServer:
                     self.cal_running = False
                     delta   = self.latest_pulses - self.pulse_start
                     elapsed = time.time() - self.t0
+                    ppl = delta / self.target_litres if self.target_litres else 0
                     await ws.send(json.dumps({
                         "type":   "cal",
                         "delta":  delta,
                         "elapsed": round(elapsed, 2),
-                        "ppl":    delta          # 1-litre run
+                        "volume": self.target_litres,
+                        "ppl":    round(ppl, 2)
                     }))
 
                 # ---- reset counter ----

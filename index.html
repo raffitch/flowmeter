@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>1-Litre Flow-Sensor Calibration</title>
+<title>Flow-Sensor Calibration</title>
 <style>
   body   {font-family:sans-serif;max-width:520px;margin:2rem auto}
   h1     {font-size:1.4rem;margin-bottom:.6rem}
@@ -17,7 +17,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 </head>
 <body>
-<h1>Flow-sensor calibration (1&nbsp;L)</h1>
+<h1>Flow-sensor calibration</h1>
 
 <div id="status">Connecting…</div>
 
@@ -26,6 +26,10 @@
 
 <div>Elapsed time</div>
 <div id="timer" class="big">0.0&nbsp;s</div>
+
+<div>Volume (L) <input id="volume" type="number" min="0.1" step="0.1" value="1" style="width:4em"></div>
+<div>Regulator setting <input id="regSetting" type="text" style="width:6em"></div>
+<div>Supply pressure <input id="supplyPressure" type="text" style="width:6em"></div>
 
 <button id="start"  disabled>Start</button>
 <button id="stop"   disabled>Stop</button>
@@ -47,10 +51,11 @@
   const statusEl=$('status'), pulseEl=$('pulse'), timerEl=$('timer'),
         resultEl=$('result'), startBtn=$('start'), stopBtn=$('stop'),
         resetBtn=$('reset'),  saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
+        volumeEl=$('volume'), regEl=$('regSetting'), pressureEl=$('supplyPressure'),
         chartCtx=$('flowChart');
 
-  /* --- Chart.js (rolling 20 s window) --- */
-  const WINDOW_SEC = 90;
+  /* --- Chart.js (rolling WINDOW_SEC‑second window) --- */
+  const WINDOW_SEC = 90;        // adjust to change graph width
   const flowChart  = new Chart(chartCtx,{
     type:'line',
     data:{datasets:[{
@@ -80,13 +85,20 @@
   let t0=0;
   let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
   let filtPps = null;            // holds the filtered value
+  let runStart=null, runEnd=null;
   const NO_FLOW_MS = 1000;
 
   /* --- helpers: downloads --- */
   function downloadCsv(){
     const rows=flowChart.data.datasets[0].data;
     if(!rows.length){alert('No data yet');return;}
-    let csv='time_s,pps_filtered\n';
+    let csv='';
+    if(runStart) csv += `# start=${runStart.toISOString()}\n`;
+    if(runEnd)   csv += `# end=${runEnd.toISOString()}\n`;
+    csv += `# volume_L=${volumeEl.value}\n`;
+    csv += `# regulator_setting=${regEl.value}\n`;
+    csv += `# supply_pressure=${pressureEl.value}\n`;
+    csv+='time_s,pps_filtered\n';
     rows.forEach(p=>csv+=`${p.x},${p.y}\n`);
     const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     Object.assign(document.createElement('a'),{href:url,download:'flow_curve.csv'}).click();
@@ -110,6 +122,7 @@
     resetChart();
     armed=running=false;
     lastPulse=0; lastTime=performance.now();
+    runStart=null; runEnd=null;
   }
 
   /* --- WebSocket to Python bridge --- */
@@ -179,6 +192,7 @@
         lastTime=lastChange=performance.now();
         timerEl.textContent='0.0 s'; resultEl.textContent='';
         resetChart();
+        runStart=new Date(); runEnd=null;
         startBtn.disabled=true; stopBtn.disabled=false;
       }
       if(d.status==='reset-sent'){resultEl.textContent='Reset request sent…';}
@@ -188,14 +202,17 @@
     if(d.type==='cal'){
       armed=running=false;
       startBtn.disabled=false; stopBtn.disabled=true;
+      runEnd=new Date();
       timerEl.textContent=`${d.elapsed.toFixed(1)} s`;
-      resultEl.innerHTML=`<strong>${d.ppl}</strong> pulses / L<br>
+      resultEl.innerHTML=`<strong>${d.ppl}</strong> pulses / L (vol=${d.volume}L)<br>
                           (Δ=${d.delta} pulses in ${d.elapsed}s)`;
     }
   };
 
   /* --- button handlers --- */
-  startBtn.onclick =()=>ws.send('start');
+  startBtn.onclick =()=>{
+    ws.send(JSON.stringify({cmd:'start',volume:Number(volumeEl.value)}));
+  };
   stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;};
   resetBtn.onclick =()=>ws.send('reset');
   saveCsvBtn.onclick=downloadCsv;

@@ -229,6 +229,7 @@
         if(d.status==='started'){
           armed=true; running=false; startPending=true;
           lastTime=lastChange=performance.now();
+          lastPulse=0;
           timerEl.textContent='0.0 s'; resultEl.textContent='';
           startBtn.disabled=true; stopBtn.disabled=false;
         }

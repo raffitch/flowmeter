@@ -100,9 +100,12 @@ class FlowServer:
 
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
-                    self.cal_running = True
-                    self.pulse_start = self.latest_pulses
-                    self.t0          = time.time()
+                    # reset Arduino counter so each run begins at zero
+                    self.ser.write(b"r")
+                    self.latest_pulses = 0
+                    self.cal_running   = True
+                    self.pulse_start   = 0
+                    self.t0            = time.time()
                     self.target_litres = float(data.get("volume", 1))
                     await ws.send(json.dumps({"type":"ack","status":"started"}))
 

@@ -34,6 +34,7 @@
 <button id="start"  disabled>Start</button>
 <button id="stop"   disabled>Stop</button>
 <button id="reset"  disabled>Reset pulses</button>
+<button id="resetAll" disabled>Reset all</button>
 <button id="saveCsv" disabled>Save CSV</button>
 <button id="savePng" disabled>Save PNG</button>
 
@@ -51,7 +52,8 @@
   const $ = id => document.getElementById(id);
   const statusEl=$('status'), pulseEl=$('pulse'), timerEl=$('timer'),
         resultEl=$('result'), startBtn=$('start'), stopBtn=$('stop'),
-        resetBtn=$('reset'),  saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
+        resetBtn=$('reset'), resetAllBtn=$('resetAll'),
+        saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
         volumeEl=$('volume'), regEl=$('regSetting'), pressureEl=$('supplyPressure'),
         chartCtx=$('flowChart'), logList=$('logList');
 
@@ -138,6 +140,14 @@
     if(currentRun && !currentRun.end) currentRun.end=new Date();
     currentRun=null;
   }
+  function hardReset(){
+    softReset();
+    runs.length=0;
+    flowChart.data.datasets.length=0;
+    flowChart.update('none');
+    logList.innerHTML='';
+    globalMax=0;
+  }
 
   /* --- WebSocket to Python bridge --- */
   const ws=new WebSocket('ws://localhost:8765');
@@ -200,10 +210,18 @@
     if(d.type==='status'){
       if(d.msg==='serial-open'){
         statusEl.textContent='🟢 Serial link ready';
-        startBtn.disabled=resetBtn.disabled=false;
+        startBtn.disabled=resetBtn.disabled=resetAllBtn.disabled=false;
         saveCsvBtn.disabled=savePngBtn.disabled=false;
       }
-      if(d.msg==='counter-reset'){softReset();resultEl.textContent='Counter reset ✔︎';}
+      if(d.msg==='counter-reset'){
+        const wasPending=startPending;
+        softReset();
+        resultEl.textContent='Counter reset ✔︎';
+        if(wasPending){
+          armed=true; startPending=true;
+          startBtn.disabled=true; stopBtn.disabled=false;
+        }
+      }
     }
 
     /* 3️⃣ acknowledgements --------------------------------------------- */
@@ -242,6 +260,7 @@
   };
   stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;startPending=false;};
   resetBtn.onclick =()=>ws.send('reset');
+  resetAllBtn.onclick=()=>{ws.send('reset');hardReset();};
   saveCsvBtn.onclick=downloadCsv;
   savePngBtn.onclick=downloadPng;
 })();

@@ -40,6 +40,7 @@
 <canvas id="flowChart"></canvas>
 
 <div id="result"></div>
+<ul id="logList"></ul>
 
 <script>
 (() => {
@@ -52,7 +53,7 @@
         resultEl=$('result'), startBtn=$('start'), stopBtn=$('stop'),
         resetBtn=$('reset'),  saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
         volumeEl=$('volume'), regEl=$('regSetting'), pressureEl=$('supplyPressure'),
-        chartCtx=$('flowChart');
+        chartCtx=$('flowChart'), logList=$('logList');
 
   /* --- Chart.js (rolling WINDOW_SEC‑second window) --- */
   const WINDOW_SEC = 90;        // adjust to change graph width
@@ -103,6 +104,15 @@
     const url=flowChart.toBase64Image('image/png');
     Object.assign(document.createElement('a'),{href:url,download:'flow_chart.png'}).click();
   }
+
+  function addLogItem(run){
+    const li=document.createElement('li');
+    const duration=(run.elapsed??0).toFixed(1);
+    const pps=((run.delta??0)/ (run.elapsed||1)).toFixed(1);
+    li.textContent=`${run.start?.toLocaleString()} \u2192 ${run.end?.toLocaleString()} — ${duration}s, ${pps} pps`;
+    logList.appendChild(li);
+  }
+
   function newRun(){
     const hue=(runs.length*60)%360;
     const ds={
@@ -150,7 +160,7 @@
 
       /* raw instantaneous pps */
       const dt=(now-lastTime)/1000;
-      if(dt>0){
+      if(dt>0 && pulses!==lastPulse){
         const rawPps=(pulses-lastPulse)/dt;
 
         /* --- exponential smoothing ------------------------------------ */
@@ -158,8 +168,10 @@
         else filtPps = ALPHA*rawPps + (1-ALPHA)*filtPps;
 
         /* plot --------------------------------------------------------- */
-        const t=running?((now-t0)/1000):0;
-        if(currentRun){
+
+        if(running && currentRun && now>t0){
+          const t=(now-t0)/1000;
+
           const pts=currentRun.dataset.data;
           pts.push({x:t,y:filtPps});
           if(t>globalMax) globalMax=t;
@@ -207,7 +219,13 @@
     if(d.type==='cal'){
       armed=running=false;
       startBtn.disabled=false; stopBtn.disabled=true;
-      if(currentRun) currentRun.end=new Date();
+
+      if(currentRun){
+        Object.assign(currentRun,{end:new Date(),delta:d.delta,elapsed:d.elapsed});
+        addLogItem(currentRun);
+        currentRun=null;
+      }
+
       timerEl.textContent=`${d.elapsed.toFixed(1)} s`;
       resultEl.innerHTML=`<strong>${d.ppl}</strong> pulses / L (vol=${d.volume}L)<br>
                           (Δ=${d.delta} pulses in ${d.elapsed}s)`;

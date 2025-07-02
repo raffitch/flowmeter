@@ -7,7 +7,7 @@ flow_calibrator.py
 • Accepts 'start', 'stop', and 'reset' commands from the browser.
 """
 
-import argparse, asyncio, json, sys, time
+import argparse, asyncio, json, sys, time, pathlib, webbrowser
 import serial, serial.tools.list_ports, websockets
 
 BAUD_RATE     = 115_200
@@ -134,7 +134,13 @@ async def main():
     args = ap.parse_args()
 
     port = args.port or choose_port()
-    fs   = FlowServer(port)
+    try:
+        fs = FlowServer(port)
+        print("✔ Connected")
+    except serial.SerialException as e:
+        sys.exit(f"❌  Could not open {port}: {e}")
+
+    webbrowser.open((pathlib.Path(__file__).parent/'index.html').resolve().as_uri())
 
     await asyncio.gather(
         fs.serial_reader(),

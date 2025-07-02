@@ -226,13 +226,12 @@
 
     /* 3️⃣ acknowledgements --------------------------------------------- */
     if(d.type==='ack'){
-      if(d.status==='started'){
-        armed=true; running=false; startPending=true;
-        lastPulse=Number(pulseEl.textContent);
-        lastTime=lastChange=performance.now();
-        timerEl.textContent='0.0 s'; resultEl.textContent='';
-        startBtn.disabled=true; stopBtn.disabled=false;
-      }
+        if(d.status==='started'){
+          armed=true; running=false; startPending=true;
+          lastTime=lastChange=performance.now();
+          timerEl.textContent='0.0 s'; resultEl.textContent='';
+          startBtn.disabled=true; stopBtn.disabled=false;
+        }
       if(d.status==='reset-sent'){resultEl.textContent='Reset request sent…';}
     }
 

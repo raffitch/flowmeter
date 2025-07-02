@@ -140,12 +140,19 @@ async def main():
     except serial.SerialException as e:
         sys.exit(f"❌  Could not open {port}: {e}")
 
-    webbrowser.open((pathlib.Path(__file__).parent/'index.html').resolve().as_uri())
+    # start WebSocket server before opening the browser to avoid connection
+    # errors when the page loads
+    server = await websockets.serve(fs.ws_handler, WS_HOST, WS_PORT)
+
+    async def open_interface():
+        await asyncio.sleep(0.5)
+        webbrowser.open((pathlib.Path(__file__).parent/'index.html').resolve().as_uri())
 
     await asyncio.gather(
         fs.serial_reader(),
         fs.broadcaster(),
-        websockets.serve(fs.ws_handler, WS_HOST, WS_PORT)
+        server.wait_closed(),
+        open_interface(),
     )
 
 if __name__ == "__main__":

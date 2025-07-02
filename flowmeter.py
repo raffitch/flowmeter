@@ -145,7 +145,8 @@ async def main():
     server = await websockets.serve(fs.ws_handler, WS_HOST, WS_PORT)
 
     async def open_interface():
-        await asyncio.sleep(0.5)
+        # give the websocket server a moment to start before opening the page
+        await asyncio.sleep(2.0)
         webbrowser.open((pathlib.Path(__file__).parent/'index.html').resolve().as_uri())
 
     await asyncio.gather(

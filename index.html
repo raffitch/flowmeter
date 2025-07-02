@@ -72,7 +72,7 @@
   });
 
   /* --- run-time state --- */
-  let armed=false,running=false;
+  let armed=false,running=false,startPending=false;
   let t0=0;
   let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
   let filtPps = null;            // holds the filtered value
@@ -108,8 +108,8 @@
   function addLogItem(run){
     const li=document.createElement('li');
     const duration=(run.elapsed??0).toFixed(1);
-    const pps=((run.delta??0)/ (run.elapsed||1)).toFixed(1);
-    li.textContent=`${run.start?.toLocaleString()} \u2192 ${run.end?.toLocaleString()} — ${duration}s, ${pps} pps`;
+    const ppl=(run.ppl??0).toFixed(1);
+    li.textContent=`${run.start?.toLocaleString()} — ${duration}s, ${ppl} pulses/L`;
     logList.appendChild(li);
   }
 
@@ -133,7 +133,7 @@
     pulseEl.textContent='0';
     timerEl.textContent='0.0 s';
     resultEl.textContent='';
-    armed=running=false;
+    armed=running=false; startPending=false;
     lastPulse=0; lastTime=performance.now();
     if(currentRun && !currentRun.end) currentRun.end=new Date();
     currentRun=null;
@@ -155,6 +155,11 @@
 
       /* arm->running transition on first pulse */
       if(armed && !running && pulses!==lastPulse){
+        if(startPending){
+          newRun();
+          currentRun.start=new Date();
+          startPending=false;
+        }
         running=true; t0=now; lastChange=now; filtPps=null;
       }
 
@@ -185,7 +190,7 @@
 
       /* auto-stop after NO_FLOW_MS of zero-increment */
       if(running && now-lastChange>NO_FLOW_MS){
-        ws.send('stop'); armed=running=false;
+        ws.send('stop'); armed=running=false; startPending=false;
       }
 
       lastPulse=pulses; lastTime=now;
@@ -204,12 +209,10 @@
     /* 3️⃣ acknowledgements --------------------------------------------- */
     if(d.type==='ack'){
       if(d.status==='started'){
-        armed=true; running=false;
+        armed=true; running=false; startPending=true;
         lastPulse=Number(pulseEl.textContent);
         lastTime=lastChange=performance.now();
         timerEl.textContent='0.0 s'; resultEl.textContent='';
-        newRun();
-        currentRun.start=new Date();
         startBtn.disabled=true; stopBtn.disabled=false;
       }
       if(d.status==='reset-sent'){resultEl.textContent='Reset request sent…';}
@@ -221,10 +224,11 @@
       startBtn.disabled=false; stopBtn.disabled=true;
 
       if(currentRun){
-        Object.assign(currentRun,{end:new Date(),delta:d.delta,elapsed:d.elapsed});
+        Object.assign(currentRun,{end:new Date(),delta:d.delta,elapsed:d.elapsed,ppl:d.ppl});
         addLogItem(currentRun);
         currentRun=null;
       }
+      startPending=false;
 
       timerEl.textContent=`${d.elapsed.toFixed(1)} s`;
       resultEl.innerHTML=`<strong>${d.ppl}</strong> pulses / L (vol=${d.volume}L)<br>
@@ -236,7 +240,7 @@
   startBtn.onclick =()=>{
     ws.send(JSON.stringify({cmd:'start',volume:Number(volumeEl.value)}));
   };
-  stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;};
+  stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;startPending=false;};
   resetBtn.onclick =()=>ws.send('reset');
   saveCsvBtn.onclick=downloadCsv;
   savePngBtn.onclick=downloadPng;

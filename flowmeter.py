@@ -50,6 +50,12 @@ class FlowServer:
 
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
 
+    def send(self, cmd: str) -> None:
+        """Send a single-character command to the Arduino and log it."""
+        self.ser.write(cmd.encode())
+        self.ser.flush()
+        print(f"→ Arduino: {cmd}")
+
     # ── serial→memory loop ────────────────────────────────────────────────
     async def serial_reader(self):
         while True:
@@ -63,6 +69,10 @@ class FlowServer:
             elif line == "reset-ack":            # Arduino confirmation
                 self.status_queue.append(json.dumps(
                     {"type":"status", "msg":"counter-reset"}))
+            elif line == "valve-open":
+                print("🟢 Valve opened")
+            elif line == "valve-closed":
+                print("🔴 Valve closed")
 
             await asyncio.sleep(0.01)
 
@@ -101,7 +111,8 @@ class FlowServer:
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
                     # reset Arduino counter so each run begins at zero
-                    self.ser.write(b"r")
+                    self.send('r')                # reset
+                    self.send('o')                # open valve
                     self.latest_pulses = 0
                     self.cal_running   = True
                     self.pulse_start   = 0
@@ -111,6 +122,7 @@ class FlowServer:
 
                 # ---- stop calibration ----
                 elif cmd == "stop" and self.cal_running:
+                    self.send('c')                # close valve
                     self.cal_running = False
                     delta   = self.latest_pulses - self.pulse_start
                     elapsed = time.time() - self.t0
@@ -125,7 +137,7 @@ class FlowServer:
 
                 # ---- reset counter ----
                 elif cmd == "reset":
-                    self.ser.write(b"r")         # tell Arduino
+                    self.send('r')                # tell Arduino
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
         finally:
             self.clients.discard(ws)

@@ -81,7 +81,7 @@
   const runs=[];                 // store all runs
   let currentRun=null;           // {dataset, volume, regulator, pressure, start,end}
   let globalMax=0;
-  const NO_FLOW_MS = 1000;
+  const NO_FLOW_MS = 3000;    // wait longer before auto-stop
 
   /* --- helpers: downloads --- */
   function downloadCsv(){

@@ -53,6 +53,9 @@ class FlowServer:
     def send(self, cmd: str) -> None:
         """Send a single-character command to the Arduino and log it."""
         self.ser.write(cmd.encode())
+
+        self.ser.flush()
+
         print(f"→ Arduino: {cmd}")
 
     # ── serial→memory loop ────────────────────────────────────────────────
@@ -68,6 +71,10 @@ class FlowServer:
             elif line == "reset-ack":            # Arduino confirmation
                 self.status_queue.append(json.dumps(
                     {"type":"status", "msg":"counter-reset"}))
+            elif line == "valve-open":
+                print("🟢 Valve opened")
+            elif line == "valve-closed":
+                print("🔴 Valve closed")
 
             await asyncio.sleep(0.01)
 

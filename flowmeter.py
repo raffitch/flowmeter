@@ -102,6 +102,7 @@ class FlowServer:
                 if cmd == "start" and not self.cal_running:
                     # reset Arduino counter so each run begins at zero
                     self.ser.write(b"r")
+                    self.ser.write(b"o")          # open valve
                     self.latest_pulses = 0
                     self.cal_running   = True
                     self.pulse_start   = 0
@@ -111,6 +112,7 @@ class FlowServer:
 
                 # ---- stop calibration ----
                 elif cmd == "stop" and self.cal_running:
+                    self.ser.write(b"c")            # close valve
                     self.cal_running = False
                     delta   = self.latest_pulses - self.pulse_start
                     elapsed = time.time() - self.t0

@@ -53,7 +53,9 @@ class FlowServer:
     def send(self, cmd: str) -> None:
         """Send a single-character command to the Arduino and log it."""
         self.ser.write(cmd.encode())
+
         self.ser.flush()
+
         print(f"→ Arduino: {cmd}")
 
     # ── serial→memory loop ────────────────────────────────────────────────

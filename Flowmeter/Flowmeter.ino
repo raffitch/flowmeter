@@ -38,6 +38,7 @@ void loop() {
       Serial.println(F("reset-ack"));   // confirmation
     } else if (c == 'o') {              // open valve
       digitalWrite(VALVE_SIG_PIN, HIGH);
+
       Serial.println(F("valve-open"));
     } else if (c == 'c') {              // close valve
       digitalWrite(VALVE_SIG_PIN, LOW);

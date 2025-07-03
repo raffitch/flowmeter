@@ -7,7 +7,6 @@
  */
 
 const byte  FLOW_PIN      = 2;          // interrupt pin
-const byte  VALVE_VCC_PIN = 9;          // relay VCC pin (kept HIGH)
 const byte  VALVE_SIG_PIN = 8;          // relay signal pin
 const unsigned long BAUD  = 115200;
 const unsigned long INTERVAL_MS = 500;  // how often to send a CSV frame
@@ -18,8 +17,6 @@ void setup() {
   pinMode(FLOW_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(FLOW_PIN), countPulse, RISING);
 
-  pinMode(VALVE_VCC_PIN, OUTPUT);
-  digitalWrite(VALVE_VCC_PIN, HIGH);  // power relay
   pinMode(VALVE_SIG_PIN, OUTPUT);
   digitalWrite(VALVE_SIG_PIN, LOW);   // valve normally closed
 

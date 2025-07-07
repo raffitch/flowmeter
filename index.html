@@ -24,12 +24,16 @@
 <div>Pulses counted</div>
 <div id="pulse"  class="big">0</div>
 
+<div>Weight [g]</div>
+<div id="weight" class="big">0.0</div>
+
 <div>Elapsed time</div>
 <div id="timer" class="big">0.0&nbsp;s</div>
 
 <div>Volume (L) <input id="volume" type="number" min="0.1" step="0.1" value="1" style="width:4em"></div>
 <div>Regulator setting <input id="regSetting" type="text" style="width:6em"></div>
 <div>Supply pressure <input id="supplyPressure" type="text" style="width:6em"></div>
+<div>Stop at weight [g] <input id="weightTarget" type="number" min="0" step="0.1" value="0" style="width:6em"></div>
 
 <button id="start"  disabled>Start</button>
 <button id="stop"   disabled>Stop</button>
@@ -51,6 +55,7 @@
   /* --- DOM refs --- */
   const $ = id => document.getElementById(id);
   const statusEl=$('status'), pulseEl=$('pulse'), timerEl=$('timer'),
+        weightEl=$('weight'), weightTargetEl=$('weightTarget'),
         resultEl=$('result'), startBtn=$('start'), stopBtn=$('stop'),
         resetBtn=$('reset'), resetAllBtn=$('resetAll'),
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
@@ -78,6 +83,7 @@
   let t0=0;
   let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
   let filtPps = null;            // holds the filtered value
+  let latestWeight = 0;
   const runs=[];                 // store all runs
   let currentRun=null;           // {dataset, volume, regulator, pressure, start,end}
   let globalMax=0;
@@ -133,10 +139,12 @@
   }
   function softReset(){
     pulseEl.textContent='0';
+    weightEl.textContent='0.0';
     timerEl.textContent='0.0 s';
     resultEl.textContent='';
     armed=running=false; startPending=false;
     lastPulse=0; lastTime=performance.now();
+    latestWeight=0;
     if(currentRun && !currentRun.end) currentRun.end=new Date();
     currentRun=null;
   }
@@ -161,7 +169,10 @@
     /* 1️⃣ live frame ----------------------------------------------------- */
     if(d.type==='live'){
       const pulses=d.pulses;
+      const weight=d.weight??0;
       pulseEl.textContent=pulses;
+      weightEl.textContent=weight.toFixed(2);
+      latestWeight=weight;
 
       /* arm->running transition on first pulse */
       if(armed && !running && pulses!==lastPulse){
@@ -256,7 +267,11 @@
 
   /* --- button handlers --- */
   startBtn.onclick =()=>{
-    ws.send(JSON.stringify({cmd:'start',volume:Number(volumeEl.value)}));
+    ws.send(JSON.stringify({
+      cmd:'start',
+      volume:Number(volumeEl.value),
+      weightTarget:Number(weightTargetEl.value)
+    }));
   };
   stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;startPending=false;};
   resetBtn.onclick =()=>ws.send('reset');

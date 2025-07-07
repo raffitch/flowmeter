@@ -29,3 +29,20 @@ the filtered pulses‑per‑second data.
 
 For consistent results, keep the water source pressure and temperature steady
 and perform multiple runs for each regulator setting.
+
+## HX711 scale
+
+`Flowmeter/Flowmeter.ino` also reads a load cell via the HX711 amplifier and includes the weight in each CSV frame. Connect the HX711 pins as follows:
+
+```
+HX711 DT  → Arduino D4
+HX711 SCK → Arduino D5
+VCC → 5 V
+GND → GND
+```
+
+After uploading the sketch, run `python3 flowmeter.py` as usual. The web interface will display the live weight and you can set a weight target to stop the run automatically.
+
+Weight readings are sent every 200 ms with a 4‑sample moving average. If the
+system reacts too slowly or is too noisy, adjust `INTERVAL_MS` and `SOFT_AVG`
+in `Flowmeter.ino`.

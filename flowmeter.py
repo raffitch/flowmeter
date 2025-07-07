@@ -40,6 +40,7 @@ class FlowServer:
 
         self.latest_pulses = 0
         self.latest_millis = 0
+        self.latest_weight = 0.0
         self.clients       = set()
 
         # calibration state
@@ -49,6 +50,8 @@ class FlowServer:
         self.target_litres = 1.0
 
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
+
+        self.target_weight = 0.0
 
     def send(self, cmd: str) -> None:
         """Send a single-character command to the Arduino and log it."""
@@ -64,9 +67,21 @@ class FlowServer:
             line = self.ser.readline().decode(errors="ignore").strip()
 
             if "," in line:                      # CSV data frame
-                ms, pc              = line.split(",")
-                self.latest_millis  = int(ms)
-                self.latest_pulses  = int(pc)
+                parts = line.split(",")
+                if len(parts) >= 2:
+                    self.latest_millis = int(parts[0])
+                    self.latest_pulses = int(parts[1])
+                if len(parts) >= 3:
+                    try:
+                        self.latest_weight = float(parts[2])
+                        if (
+                            self.target_weight > 0
+                            and self.latest_weight >= self.target_weight
+                            and self.cal_running
+                        ):
+                            await self.stop_due_to_weight()
+                    except ValueError:
+                        pass
 
             elif line == "reset-ack":            # Arduino confirmation
                 self.status_queue.append(json.dumps(
@@ -78,6 +93,27 @@ class FlowServer:
 
             await asyncio.sleep(0.01)
 
+
+    async def stop_due_to_weight(self):
+        self.send('c')
+        self.cal_running = False
+        delta = self.latest_pulses - self.pulse_start
+        elapsed = time.time() - self.t0
+        ppl = delta / self.target_litres if self.target_litres else 0
+        msg = json.dumps({
+            "type": "cal",
+            "delta": delta,
+            "elapsed": round(elapsed, 2),
+            "volume": self.target_litres,
+            "ppl": round(ppl, 2)
+        })
+        await self._notify_clients(msg)
+        self.target_weight = 0.0
+
+    async def _notify_clients(self, msg: str):
+        if self.clients:
+            await asyncio.gather(*(c.send(msg) for c in self.clients), return_exceptions=True)
+
     # ── broadcaster: push live data every LIVE_INTERVAL ───────────────────
     async def broadcaster(self):
         while True:
@@ -85,7 +121,8 @@ class FlowServer:
                 msg = json.dumps({
                     "type":   "live",
                     "millis": self.latest_millis,
-                    "pulses": self.latest_pulses
+                    "pulses": self.latest_pulses,
+                    "weight": self.latest_weight
                 })
                 await asyncio.gather(
                     *(c.send(msg) for c in self.clients),
@@ -120,6 +157,7 @@ class FlowServer:
                     self.pulse_start   = 0
                     self.t0            = time.time()
                     self.target_litres = float(data.get("volume", 1))
+                    self.target_weight = float(data.get("weightTarget", 0))
                     await ws.send(json.dumps({"type":"ack","status":"started"}))
 
                 # ---- stop calibration ----
@@ -136,6 +174,7 @@ class FlowServer:
                         "volume": self.target_litres,
                         "ppl":    round(ppl, 2)
                     }))
+                    self.target_weight = 0.0
 
                 # ---- reset counter ----
                 elif cmd == "reset":

@@ -29,3 +29,16 @@ the filtered pulses‑per‑second data.
 
 For consistent results, keep the water source pressure and temperature steady
 and perform multiple runs for each regulator setting.
+
+## Optional HX711 scale
+
+A second Arduino can stream weight readings from a load cell using the HX711 amplifier. This repository includes `HX711Scale/HX711Scale.ino` which sends weight in grams over Serial at 20 Hz. The data line was moved from pin 2 to pin 4 because pin 2 is already used by the flow sensor interrupt. Connect the HX711 pins as follows:
+
+```
+HX711 DT  → Arduino D4
+HX711 SCK → Arduino D5
+VCC → 5 V
+GND → GND
+```
+
+Upload the sketch to an Arduino and run `flowmeter.py` with `--scale-port` pointing to the scale's serial port. The web interface will show the live weight and you can optionally set a weight target to stop the run automatically.

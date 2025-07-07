@@ -1,15 +1,35 @@
 /*
- * flow_sensor_1L.ino  –  Streams pulse counter over Serial and supports reset
- * Wire:
+ * Combined flow sensor + HX711 scale firmware
+ * Streams "millis,pulses,grams" over Serial every 500 ms
+ *
+ * Flow sensor wiring:
  *   Yellow  → D2  (signal)        (use INPUT_PULLUP)
- *   Red     → 5 V
+ *   Red     → 5 V
  *   Black   → GND
+ *
+ * HX711 wiring:
+ *   DT  → D4
+ *   SCK → D5
+ *   VCC → 5 V
+ *   GND → GND
  */
 
-const byte  FLOW_PIN      = 2;          // interrupt pin
-const byte  VALVE_SIG_PIN = 8;          // relay signal pin
+#include <HX711.h>
+
+const byte FLOW_PIN       = 2;          // flow sensor interrupt pin
+const byte VALVE_SIG_PIN  = 8;          // relay signal pin
+const byte PIN_DOUT       = 4;          // HX711 data  (DT)
+const byte PIN_SCK        = 5;          // HX711 clock (SCK)
+
 const unsigned long BAUD  = 115200;
 const unsigned long INTERVAL_MS = 500;  // how often to send a CSV frame
+
+constexpr float COUNTS_PER_GRAM = -1153.584f; // calibration slope
+constexpr byte  TARE_READS = 20;               // samples for tare
+constexpr byte  SOFT_AVG   = 8;                // weight averaging
+
+HX711 scale;
+long offset = 0;                               // HX711 tare offset
 
 volatile unsigned long pulseCount = 0;
 
@@ -21,6 +41,16 @@ void setup() {
   digitalWrite(VALVE_SIG_PIN, LOW);   // valve normally closed
 
   Serial.begin(BAUD);
+  while (!Serial) ;
+
+  scale.begin(PIN_DOUT, PIN_SCK);
+  long acc = 0;
+  for (byte i = 0; i < TARE_READS; ++i) {
+    while (!scale.is_ready()) {}
+    acc += scale.read();
+  }
+  offset = acc / TARE_READS;
+
   Serial.println(F("ready"));           // banner for host script
 }
 
@@ -52,9 +82,19 @@ void loop() {
     unsigned long count = pulseCount;
     interrupts();
 
+    long acc = 0;
+    for (byte i = 0; i < SOFT_AVG; ++i) {
+      while (!scale.is_ready()) {}
+      acc += scale.read();
+    }
+    long raw = acc / SOFT_AVG;
+    float g = (raw - offset) / COUNTS_PER_GRAM;
+
     Serial.print(now);
     Serial.print(',');
-    Serial.println(count);
+    Serial.print(count);
+    Serial.print(',');
+    Serial.println(g, 4);
 
     lastPrint = now;
   }

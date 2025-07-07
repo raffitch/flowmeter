@@ -31,20 +31,9 @@ def choose_port() -> str:
 
 # ── flow server class ──────────────────────────────────────────────────────
 class FlowServer:
-    def __init__(self, port: str, scale_port: str|None=None):
+    def __init__(self, port: str):
         print(f"🔗  Opening {port} @ {BAUD_RATE} …")
         self.ser = serial.Serial(port, BAUD_RATE, timeout=1)
-
-        self.scale_ser = None
-        if scale_port:
-            try:
-                print(f"🔗  Opening scale on {scale_port} @ {BAUD_RATE} …")
-                self.scale_ser = serial.Serial(scale_port, BAUD_RATE, timeout=1)
-                # flush any startup noise
-                time.sleep(2)
-                self.scale_ser.reset_input_buffer()
-            except serial.SerialException as e:
-                print(f"⚠️  Could not open scale port {scale_port}: {e}")
 
         banner = self.ser.readline().decode(errors="ignore").strip()
         print(f"🖥  Arduino says: {banner or '<no banner>'}")
@@ -78,9 +67,21 @@ class FlowServer:
             line = self.ser.readline().decode(errors="ignore").strip()
 
             if "," in line:                      # CSV data frame
-                ms, pc              = line.split(",")
-                self.latest_millis  = int(ms)
-                self.latest_pulses  = int(pc)
+                parts = line.split(",")
+                if len(parts) >= 2:
+                    self.latest_millis = int(parts[0])
+                    self.latest_pulses = int(parts[1])
+                if len(parts) >= 3:
+                    try:
+                        self.latest_weight = float(parts[2])
+                        if (
+                            self.target_weight > 0
+                            and self.latest_weight >= self.target_weight
+                            and self.cal_running
+                        ):
+                            await self.stop_due_to_weight()
+                    except ValueError:
+                        pass
 
             elif line == "reset-ack":            # Arduino confirmation
                 self.status_queue.append(json.dumps(
@@ -92,25 +93,6 @@ class FlowServer:
 
             await asyncio.sleep(0.01)
 
-    # ── scale serial→memory loop ----------------------------------------
-    async def scale_reader(self):
-        if not self.scale_ser:
-            return
-        while True:
-            line = self.scale_ser.readline().decode(errors='ignore').strip()
-            if line:
-                try:
-                    _, g = line.split('\t')
-                    self.latest_weight = float(g)
-                    if (
-                        self.target_weight > 0
-                        and self.latest_weight >= self.target_weight
-                        and self.cal_running
-                    ):
-                        await self.stop_due_to_weight()
-                except ValueError:
-                    pass
-            await asyncio.sleep(0.01)
 
     async def stop_due_to_weight(self):
         self.send('c')
@@ -205,12 +187,11 @@ class FlowServer:
 async def main():
     ap = argparse.ArgumentParser(description="WebSocket bridge for flow sensor")
     ap.add_argument("-p", "--port", help="Serial port (e.g. COM3, /dev/ttyACM0)")
-    ap.add_argument("--scale-port", help="Serial port for HX711 scale")
     args = ap.parse_args()
 
     port = args.port or choose_port()
     try:
-        fs = FlowServer(port, scale_port=args.scale_port)
+        fs = FlowServer(port)
         print("✔ Connected")
     except serial.SerialException as e:
         sys.exit(f"❌  Could not open {port}: {e}")
@@ -226,7 +207,6 @@ async def main():
 
     await asyncio.gather(
         fs.serial_reader(),
-        fs.scale_reader(),
         fs.broadcaster(),
         server.wait_closed(),
         open_interface(),

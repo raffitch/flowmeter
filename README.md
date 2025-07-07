@@ -42,3 +42,7 @@ GND → GND
 ```
 
 After uploading the sketch, run `python3 flowmeter.py` as usual. The web interface will display the live weight and you can set a weight target to stop the run automatically.
+
+Weight readings are sent every 200 ms with a 4‑sample moving average. If the
+system reacts too slowly or is too noisy, adjust `INTERVAL_MS` and `SOFT_AVG`
+in `Flowmeter.ino`.

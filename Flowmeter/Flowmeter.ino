@@ -22,11 +22,11 @@ const byte PIN_DOUT       = 4;          // HX711 data  (DT)
 const byte PIN_SCK        = 5;          // HX711 clock (SCK)
 
 const unsigned long BAUD  = 115200;
-const unsigned long INTERVAL_MS = 500;  // how often to send a CSV frame
+const unsigned long INTERVAL_MS = 200;  // CSV frame interval (lower = faster)
 
 constexpr float COUNTS_PER_GRAM = -1153.584f; // calibration slope
 constexpr byte  TARE_READS = 20;               // samples for tare
-constexpr byte  SOFT_AVG   = 8;                // weight averaging
+constexpr byte  SOFT_AVG   = 4;                // HX711 reads to average
 
 HX711 scale;
 long offset = 0;                               // HX711 tare offset

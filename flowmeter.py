@@ -112,13 +112,13 @@ class FlowServer:
         self.cal_running = False
         delta = self.latest_pulses - self.pulse_start
         elapsed = time.time() - self.t0
-        ppl = delta / self.target_litres if self.target_litres else 0
+        pps = delta / elapsed if elapsed > 0 else 0
         msg = json.dumps({
             "type":   "cal",
             "delta":  delta,
             "elapsed": round(elapsed, 2),
             "volume":  self.target_litres,
-            "ppl":     round(ppl, 2)
+            "pps":     round(pps, 2)
         })
         await asyncio.gather(*(c.send(msg) for c in self.clients), return_exceptions=True)
         self.target_pulses = None
@@ -162,6 +162,8 @@ class FlowServer:
                 # ---- reset counter ----
                 elif cmd == "reset":
                     self.send('r')                # tell Arduino
+                    self.latest_pulses = 0
+                    self.latest_millis = 0
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
         finally:
             self.clients.discard(ws)

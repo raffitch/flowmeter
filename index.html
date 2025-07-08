@@ -115,9 +115,8 @@
   function addLogItem(run){
     const li=document.createElement('li');
     const duration=(run.elapsed??0).toFixed(1);
-    const ppl=(run.ppl??0).toFixed(1);
-    const avgPps=(run.delta&&run.elapsed)?(run.delta/run.elapsed).toFixed(1):'0.0';
-    li.textContent=`${run.start?.toLocaleString()} — ${duration}s, ${ppl} pulses/L, ${avgPps} pps`;
+    const avgPps=(run.pps??(run.delta&&run.elapsed?run.delta/run.elapsed:0)).toFixed(1);
+    li.textContent=`${run.start?.toLocaleString()} — ${duration}s, ${avgPps} pps (${run.delta} pulses)`;
     logList.appendChild(li);
   }
 
@@ -267,14 +266,14 @@ function softReset(){
       startBtn.disabled=false; stopBtn.disabled=true;
 
       if(currentRun){
-        Object.assign(currentRun,{end:new Date(),delta:d.delta,elapsed:d.elapsed,ppl:d.ppl});
+        Object.assign(currentRun,{end:new Date(),delta:d.delta,elapsed:d.elapsed,pps:d.pps});
         addLogItem(currentRun);
         currentRun=null;
       }
       startPending=false;
 
       timerEl.textContent=`${d.elapsed.toFixed(1)} s`;
-      resultEl.innerHTML=`<strong>${d.ppl}</strong> pulses / L (vol=${d.volume}L)<br>
+      resultEl.innerHTML=`<strong>${d.pps}</strong> pps<br>
                           (Δ=${d.delta} pulses in ${d.elapsed}s)`;
     }
   };

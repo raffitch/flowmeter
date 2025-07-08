@@ -41,6 +41,10 @@ void loop() {
       digitalWrite(LED_PIN, HIGH);      // short blink
       delay(50);
       digitalWrite(LED_PIN, LOW);
+      // send an immediate zero frame so the host updates right away
+      Serial.print(millis());
+      Serial.print(',');
+      Serial.println(pulseCount);
     } else if (c == 'o') {              // open valve
       digitalWrite(VALVE_SIG_PIN, HIGH);
 

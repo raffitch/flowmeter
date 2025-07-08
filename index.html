@@ -134,9 +134,10 @@
     currentRun={traceIndex:idx,trace:trace,volume:volumeEl.value,regulator:regEl.value,pressure:pressureInputEl.value,start:null,end:null};
     runs.push(currentRun);
   }
-  function softReset(){
+function softReset(){
     pulseEl.textContent='0';
     timerEl.textContent='0.0 s';
+    ppsEl.textContent='0';
     resultEl.textContent='';
     armed=running=false; startPending=false;
     lastPulse=0; lastTime=performance.now();
@@ -248,7 +249,9 @@
           armed=true; running=false; startPending=true;
           lastTime=lastChange=performance.now();
           lastPulse=0;
-          timerEl.textContent='0.0 s'; resultEl.textContent='';
+          timerEl.textContent='0.0 s';
+          ppsEl.textContent='0';
+          resultEl.textContent='';
           startBtn.disabled=true; stopBtn.disabled=false;
         }
       if(d.status==='reset-sent'){resultEl.textContent='Reset request sent…';}

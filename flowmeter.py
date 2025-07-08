@@ -73,6 +73,7 @@ class FlowServer:
                     self.latest_pulses = int(pc)
 
             elif line == "reset-ack":            # Arduino confirmation
+                print("↳ reset acknowledged")
                 self.status_queue.append(json.dumps(
                     {"type":"status", "msg":"counter-reset"}))
             elif line == "valve-open":

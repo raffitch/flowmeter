@@ -9,7 +9,9 @@
 const byte  FLOW_PIN      = 2;          // interrupt pin
 const byte  VALVE_SIG_PIN = 8;          // relay signal pin
 const unsigned long BAUD  = 115200;
-const unsigned long INTERVAL_MS = 500;  // how often to send a CSV frame
+// Data frame interval. 200 ms gives a good balance between latency and
+// smoothing on the host side.
+const unsigned long INTERVAL_MS = 200;  // how often to send a CSV frame
 
 volatile unsigned long pulseCount = 0;
 

@@ -50,8 +50,8 @@
 
 <script>
 (() => {
-  /* --- Configurable filter strength (0.0 – 1.0) --- */
-  const ALPHA = 0.5;     // 0.25 ≈ keep 75 % of new value
+  /* --- Moving-average window (samples) --- */
+  const MA_WINDOW = 3;   // with 200 ms frames ≈ ~0.6 s of smoothing
 
   /* --- DOM refs --- */
   const $ = id => document.getElementById(id);
@@ -77,6 +77,7 @@
   let t0=0;
   let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
   let filtPps = null;            // holds the filtered value
+  const ppsBuf = [];             // moving-average buffer
   const runs=[];                 // store all runs
   let currentRun=null;           // {traceIndex, trace, volume, regulator, pressure, start,end}
   let globalMax=0;
@@ -137,6 +138,7 @@
     resultEl.textContent='';
     armed=running=false; startPending=false;
     lastPulse=0; lastTime=performance.now();
+    ppsBuf.length=0; filtPps=null;
     if(currentRun && !currentRun.end) currentRun.end=new Date();
     currentRun=null;
   }
@@ -181,9 +183,11 @@
       if(dt>0 && pulses!==lastPulse){
         const rawPps=(pulses-lastPulse)/dt;
 
-        /* --- exponential smoothing ------------------------------------ */
-        if(filtPps===null) filtPps=rawPps;          // initialise
-        else filtPps = ALPHA*rawPps + (1-ALPHA)*filtPps;
+        /* --- short moving average ------------------------------------ */
+        ppsBuf.push(rawPps);
+        if(ppsBuf.length>MA_WINDOW) ppsBuf.shift();
+        const sum=ppsBuf.reduce((a,b)=>a+b,0);
+        filtPps=sum/ppsBuf.length;
 
         /* plot --------------------------------------------------------- */
 

@@ -17,7 +17,8 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Upload `Flowmeter/Flowmeter.ino` to an Arduino.
+1. Upload `Flowmeter/Flowmeter.ino` to an Arduino (it prints a data frame
+   every 200 ms).
 2. Run `python3 flowmeter.py` and select the correct serial port.
 3. Open `index.html` in a browser.
 4. Enter a target volume, regulator setting and supply pressure then press
@@ -28,8 +29,9 @@ The plotted curve can be saved to CSV or PNG. Each CSV contains run metadata
 the filtered pulses‑per‑second data. Record gauge readings manually using the
 Supply pressure field.
 
-The interface now shows live averaged pulses per second and can optionally stop
-the calibration after a specified number of pulses or elapsed seconds.
+The interface shows live pulses per second, smoothed with a short moving
+average (~0.6 s with the default 200 ms sample rate).  Calibration can
+optionally stop after a specified number of pulses or elapsed seconds.
 
 Plotly is used for plotting, providing zoomable curves and hover details. Each
 run is drawn as a separate trace so multiple runs overlay for easy comparison,

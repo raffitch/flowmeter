@@ -30,9 +30,8 @@
 <div>Average pulses / s</div>
 <div id="pps" class="big">0</div>
 
-<div>Volume (L) <input id="volume" type="number" min="0.1" step="0.1" value="1" style="width:4em"></div>
-<div>Regulator setting <input id="regSetting" type="text" style="width:6em"></div>
-<div>Supply pressure <input id="supplyPressure" type="text" style="width:6em"></div>
+<div>Regulator version <input id="regVersion" type="text" style="width:6em"></div>
+<div>Supply pressure (MPa) <input id="supplyPressure" type="text" style="width:6em"></div>
 <div>Stop after pulses <input id="targetCounts" type="number" min="1" step="1" style="width:6em"></div>
 <div>Stop after seconds <input id="targetSeconds" type="number" min="1" step="1" style="width:6em"></div>
 
@@ -52,7 +51,9 @@
 (() => {
   /* --- Filtering windows (samples) --- */
   const MEDIAN_WINDOW = 5;  // removes spikes before averaging
-  const MA_WINDOW = 3;      // final smoothing (~0.6 s with 200 ms frames)
+  const MA_WINDOW = 5;      // final smoothing (~1 s with 200 ms frames)
+  const EMA_ALPHA = 0.5;    // exponential smoothing factor
+  const VOLUME_L = 1;       // fixed calibration volume
 
   /* --- DOM refs --- */
   const $ = id => document.getElementById(id);
@@ -61,7 +62,7 @@
         resultEl=$('result'), startBtn=$('start'), stopBtn=$('stop'),
         resetBtn=$('reset'), resetAllBtn=$('resetAll'),
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
-        volumeEl=$('volume'), regEl=$('regSetting'), pressureInputEl=$('supplyPressure'),
+        regVerEl=$('regVersion'), pressureInputEl=$('supplyPressure'),
         targetCountsEl=$('targetCounts'), targetSecondsEl=$('targetSeconds'),
         chartEl=$('flowChart'), logList=$('logList');
 
@@ -78,6 +79,7 @@
   let t0=0;
   let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
   let filtPps = null;            // holds the filtered value
+  let emaPps = null;             // exponential smoothed value
   const rawBuf = [];             // median filter buffer
   const ppsBuf = [];             // moving-average buffer
   const runs=[];                 // store all runs
@@ -94,7 +96,7 @@
       if(r.start) csv+=`# start=${r.start.toISOString()}\n`;
       if(r.end)   csv+=`# end=${r.end.toISOString()}\n`;
       csv+=`# volume_L=${r.volume}\n`;
-      csv+=`# regulator_setting=${r.regulator}\n`;
+      csv+=`# regulator_version=${r.regulator}\n`;
       csv+=`# supply_pressure=${r.pressure}\n`;
       csv+='time_s,pps_filtered\n';
       r.trace.x.forEach((x,i)=>csv+=`${x},${r.trace.y[i]}\n`);
@@ -131,7 +133,7 @@
     };
     Plotly.addTraces(chartEl, trace);
     const idx = chartEl.data.length - 1;
-    currentRun={traceIndex:idx,trace:trace,volume:volumeEl.value,regulator:regEl.value,pressure:pressureInputEl.value,start:null,end:null};
+    currentRun={traceIndex:idx,trace:trace,volume:VOLUME_L,regulator:regVerEl.value,pressure:pressureInputEl.value,start:null,end:null};
     runs.push(currentRun);
   }
 function softReset(){
@@ -141,7 +143,7 @@ function softReset(){
     resultEl.textContent='';
     armed=running=false; startPending=false;
     lastPulse=0; lastTime=performance.now();
-    rawBuf.length=0; ppsBuf.length=0; filtPps=null;
+    rawBuf.length=0; ppsBuf.length=0; filtPps=null; emaPps=null;
     if(currentRun && !currentRun.end) currentRun.end=new Date();
     currentRun=null;
   }
@@ -194,7 +196,9 @@ function softReset(){
         ppsBuf.push(mid);
         if(ppsBuf.length>MA_WINDOW) ppsBuf.shift();
         const sum=ppsBuf.reduce((a,b)=>a+b,0);
-        filtPps=sum/ppsBuf.length;
+        let avg=sum/ppsBuf.length;
+        if(emaPps===null) emaPps=avg; else emaPps=EMA_ALPHA*avg+(1-EMA_ALPHA)*emaPps;
+        filtPps=emaPps;
 
         /* plot --------------------------------------------------------- */
 
@@ -279,13 +283,13 @@ function softReset(){
   startBtn.onclick =()=>{
     ws.send(JSON.stringify({
       cmd:'start',
-      volume:Number(volumeEl.value),
+      volume:VOLUME_L,
       pulses: targetCountsEl.value?Number(targetCountsEl.value):undefined,
       seconds: targetSecondsEl.value?Number(targetSecondsEl.value):undefined
     }));
   };
   stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;startPending=false;};
-  resetBtn.onclick =()=>ws.send('reset');
+  resetBtn.onclick =()=>{ws.send('reset');softReset();};
   resetAllBtn.onclick=()=>{ws.send('reset');hardReset();};
   saveCsvBtn.onclick=downloadCsv;
   savePngBtn.onclick=downloadPng;

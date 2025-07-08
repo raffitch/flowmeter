@@ -127,7 +127,8 @@
       hovertemplate:'%{y:.1f} pps at %{x:.1f}s<extra></extra>'
     };
     Plotly.addTraces(chartEl, trace);
-    currentRun={traceIndex:runs.length,trace:trace,volume:volumeEl.value,regulator:regEl.value,pressure:pressureInputEl.value,start:null,end:null};
+    const idx = chartEl.data.length - 1;
+    currentRun={traceIndex:idx,trace:trace,volume:volumeEl.value,regulator:regEl.value,pressure:pressureInputEl.value,start:null,end:null};
     runs.push(currentRun);
   }
   function softReset(){
@@ -198,7 +199,7 @@
             globalMax=t;
             Plotly.relayout(chartEl,{"xaxis.range":[0,Math.max(WINDOW_SEC,globalMax)]});
           }
-          Plotly.update(chartEl,{x:[trace.x],y:[trace.y]},[currentRun.traceIndex]);
+          Plotly.extendTraces(chartEl,{x:[[t]],y:[[filtPps]]},[currentRun.traceIndex]);
         }
       }
 

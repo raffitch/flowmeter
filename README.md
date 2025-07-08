@@ -32,7 +32,8 @@ The interface now shows live averaged pulses per second and can optionally stop
 the calibration after a specified number of pulses or elapsed seconds.
 
 Plotly is used for plotting, providing zoomable curves and hover details. Each
-completed run is summarised with the average pulses per second.
+run is drawn as a separate trace so multiple runs overlay for easy comparison,
+and completed runs are summarised with the average pulses per second.
 
 For consistent results, keep the water source pressure and temperature steady
 and perform multiple runs for each regulator setting.

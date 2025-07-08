@@ -31,8 +31,8 @@ Supply pressure field.
 The interface now shows live averaged pulses per second and can optionally stop
 the calibration after a specified number of pulses or elapsed seconds.
 
-Chart.js is used for plotting but you can experiment with real-time plugins or
-other libraries such as Plotly if you prefer more advanced visuals.
+Plotly is used for plotting, providing zoomable curves and hover details. Each
+completed run is summarised with the average pulses per second.
 
 For consistent results, keep the water source pressure and temperature steady
 and perform multiple runs for each regulator setting.

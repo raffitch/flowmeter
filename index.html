@@ -50,8 +50,9 @@
 
 <script>
 (() => {
-  /* --- Moving-average window (samples) --- */
-  const MA_WINDOW = 3;   // with 200 ms frames ≈ ~0.6 s of smoothing
+  /* --- Filtering windows (samples) --- */
+  const MEDIAN_WINDOW = 5;  // removes spikes before averaging
+  const MA_WINDOW = 3;      // final smoothing (~0.6 s with 200 ms frames)
 
   /* --- DOM refs --- */
   const $ = id => document.getElementById(id);
@@ -77,6 +78,7 @@
   let t0=0;
   let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
   let filtPps = null;            // holds the filtered value
+  const rawBuf = [];             // median filter buffer
   const ppsBuf = [];             // moving-average buffer
   const runs=[];                 // store all runs
   let currentRun=null;           // {traceIndex, trace, volume, regulator, pressure, start,end}
@@ -138,7 +140,7 @@
     resultEl.textContent='';
     armed=running=false; startPending=false;
     lastPulse=0; lastTime=performance.now();
-    ppsBuf.length=0; filtPps=null;
+    rawBuf.length=0; ppsBuf.length=0; filtPps=null;
     if(currentRun && !currentRun.end) currentRun.end=new Date();
     currentRun=null;
   }
@@ -183,8 +185,12 @@
       if(dt>0 && pulses!==lastPulse){
         const rawPps=(pulses-lastPulse)/dt;
 
-        /* --- short moving average ------------------------------------ */
-        ppsBuf.push(rawPps);
+        /* --- median then moving average ------------------------------- */
+        rawBuf.push(rawPps);
+        if(rawBuf.length>MEDIAN_WINDOW) rawBuf.shift();
+        const mid=[...rawBuf].sort((a,b)=>a-b)[Math.floor(rawBuf.length/2)];
+
+        ppsBuf.push(mid);
         if(ppsBuf.length>MA_WINDOW) ppsBuf.shift();
         const sum=ppsBuf.reduce((a,b)=>a+b,0);
         filtPps=sum/ppsBuf.length;

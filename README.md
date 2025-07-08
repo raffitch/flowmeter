@@ -29,8 +29,9 @@ The plotted curve can be saved to CSV or PNG. Each CSV contains run metadata
 the filtered pulses‑per‑second data. Record gauge readings manually using the
 Supply pressure field.
 
-The interface shows live pulses per second, smoothed with a short moving
-average (~0.6 s with the default 200 ms sample rate).  Calibration can
+The interface shows live pulses per second. A median filter removes single-frame
+spikes before applying a short moving average (~0.6 s with the default
+200 ms sample rate).  Calibration can
 optionally stop after a specified number of pulses or elapsed seconds.
 
 Plotly is used for plotting, providing zoomable curves and hover details. Each

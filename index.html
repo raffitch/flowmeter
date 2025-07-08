@@ -27,9 +27,14 @@
 <div>Elapsed time</div>
 <div id="timer" class="big">0.0&nbsp;s</div>
 
+<div>Average pulses / s</div>
+<div id="pps" class="big">0</div>
+
 <div>Volume (L) <input id="volume" type="number" min="0.1" step="0.1" value="1" style="width:4em"></div>
 <div>Regulator setting <input id="regSetting" type="text" style="width:6em"></div>
 <div>Supply pressure <input id="supplyPressure" type="text" style="width:6em"></div>
+<div>Stop after pulses <input id="targetCounts" type="number" min="1" step="1" style="width:6em"></div>
+<div>Stop after seconds <input id="targetSeconds" type="number" min="1" step="1" style="width:6em"></div>
 
 <button id="start"  disabled>Start</button>
 <button id="stop"   disabled>Stop</button>
@@ -51,10 +56,12 @@
   /* --- DOM refs --- */
   const $ = id => document.getElementById(id);
   const statusEl=$('status'), pulseEl=$('pulse'), timerEl=$('timer'),
+        ppsEl=$('pps'),
         resultEl=$('result'), startBtn=$('start'), stopBtn=$('stop'),
         resetBtn=$('reset'), resetAllBtn=$('resetAll'),
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
-        volumeEl=$('volume'), regEl=$('regSetting'), pressureEl=$('supplyPressure'),
+        volumeEl=$('volume'), regEl=$('regSetting'), pressureInputEl=$('supplyPressure'),
+        targetCountsEl=$('targetCounts'), targetSecondsEl=$('targetSeconds'),
         chartCtx=$('flowChart'), logList=$('logList');
 
   /* --- Chart.js (rolling WINDOW_SEC‑second window) --- */
@@ -128,7 +135,7 @@
     };
     flowChart.data.datasets.push(ds);
     flowChart.update('none');
-    currentRun={dataset:ds,volume:volumeEl.value,regulator:regEl.value,pressure:pressureEl.value,start:null,end:null};
+    currentRun={dataset:ds,volume:volumeEl.value,regulator:regEl.value,pressure:pressureInputEl.value,start:null,end:null};
     runs.push(currentRun);
   }
   function softReset(){
@@ -183,6 +190,8 @@
         else filtPps = ALPHA*rawPps + (1-ALPHA)*filtPps;
 
         /* plot --------------------------------------------------------- */
+
+        ppsEl.textContent=filtPps.toFixed(1);
 
         if(running && currentRun && now>t0){
           const t=(now-t0)/1000;
@@ -256,7 +265,12 @@
 
   /* --- button handlers --- */
   startBtn.onclick =()=>{
-    ws.send(JSON.stringify({cmd:'start',volume:Number(volumeEl.value)}));
+    ws.send(JSON.stringify({
+      cmd:'start',
+      volume:Number(volumeEl.value),
+      pulses: targetCountsEl.value?Number(targetCountsEl.value):undefined,
+      seconds: targetSecondsEl.value?Number(targetSecondsEl.value):undefined
+    }));
   };
   stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;startPending=false;};
   resetBtn.onclick =()=>ws.send('reset');

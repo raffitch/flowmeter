@@ -25,7 +25,14 @@ pip install -r requirements.txt
 
 The plotted curve can be saved to CSV or PNG. Each CSV contains run metadata
 (start/end time, volume, regulator setting and supply pressure) followed by
-the filtered pulses‑per‑second data.
+the filtered pulses‑per‑second data. Record gauge readings manually using the
+Supply pressure field.
+
+The interface now shows live averaged pulses per second and can optionally stop
+the calibration after a specified number of pulses or elapsed seconds.
+
+Chart.js is used for plotting but you can experiment with real-time plugins or
+other libraries such as Plotly if you prefer more advanced visuals.
 
 For consistent results, keep the water source pressure and temperature steady
 and perform multiple runs for each regulator setting.

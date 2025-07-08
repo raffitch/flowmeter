@@ -47,6 +47,8 @@ class FlowServer:
         self.pulse_start  = 0
         self.t0           = 0.0
         self.target_litres = 1.0
+        self.target_pulses = None
+        self.target_seconds = None
 
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
 
@@ -64,9 +66,11 @@ class FlowServer:
             line = self.ser.readline().decode(errors="ignore").strip()
 
             if "," in line:                      # CSV data frame
-                ms, pc              = line.split(",")
-                self.latest_millis  = int(ms)
-                self.latest_pulses  = int(pc)
+                parts = line.split(",")
+                if len(parts) >= 2:
+                    ms, pc = parts[0], parts[1]
+                    self.latest_millis = int(ms)
+                    self.latest_pulses = int(pc)
 
             elif line == "reset-ack":            # Arduino confirmation
                 self.status_queue.append(json.dumps(
@@ -91,7 +95,33 @@ class FlowServer:
                     *(c.send(msg) for c in self.clients),
                     return_exceptions=True
                 )
+
+            if self.cal_running:
+                if self.target_pulses is not None:
+                    if self.latest_pulses - self.pulse_start >= self.target_pulses:
+                        await self.finish_calibration()
+                if self.target_seconds is not None:
+                    if time.time() - self.t0 >= self.target_seconds:
+                        await self.finish_calibration()
             await asyncio.sleep(LIVE_INTERVAL)
+
+    async def finish_calibration(self):
+        """Stop calibration, close valve and broadcast result."""
+        self.send('c')
+        self.cal_running = False
+        delta = self.latest_pulses - self.pulse_start
+        elapsed = time.time() - self.t0
+        ppl = delta / self.target_litres if self.target_litres else 0
+        msg = json.dumps({
+            "type":   "cal",
+            "delta":  delta,
+            "elapsed": round(elapsed, 2),
+            "volume":  self.target_litres,
+            "ppl":     round(ppl, 2)
+        })
+        await asyncio.gather(*(c.send(msg) for c in self.clients), return_exceptions=True)
+        self.target_pulses = None
+        self.target_seconds = None
 
     # ── websocket handler ────────────────────────────────────────────────
     async def ws_handler(self, ws):
@@ -120,22 +150,13 @@ class FlowServer:
                     self.pulse_start   = 0
                     self.t0            = time.time()
                     self.target_litres = float(data.get("volume", 1))
+                    self.target_pulses = data.get("pulses")
+                    self.target_seconds = data.get("seconds")
                     await ws.send(json.dumps({"type":"ack","status":"started"}))
 
                 # ---- stop calibration ----
                 elif cmd == "stop" and self.cal_running:
-                    self.send('c')                # close valve
-                    self.cal_running = False
-                    delta   = self.latest_pulses - self.pulse_start
-                    elapsed = time.time() - self.t0
-                    ppl = delta / self.target_litres if self.target_litres else 0
-                    await ws.send(json.dumps({
-                        "type":   "cal",
-                        "delta":  delta,
-                        "elapsed": round(elapsed, 2),
-                        "volume": self.target_litres,
-                        "ppl":    round(ppl, 2)
-                    }))
+                    await self.finish_calibration()
 
                 # ---- reset counter ----
                 elif cmd == "reset":

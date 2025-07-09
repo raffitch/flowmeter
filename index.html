@@ -77,7 +77,7 @@
   /* --- run-time state --- */
   let armed=false,running=false,startPending=false;
   let t0=0;
-  let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
+  let lastPulse=0,lastTime=performance.now(),lastMillis=0,lastChange=performance.now();
   let filtPps = null;            // holds the filtered value
   let emaPps = null;             // exponential smoothed value
   const rawBuf = [];             // median filter buffer
@@ -141,7 +141,7 @@ function softReset(){
     ppsEl.textContent='0';
     resultEl.textContent='';
     armed=running=false; startPending=false;
-    lastPulse=0; lastTime=performance.now();
+    lastPulse=0; lastTime=performance.now(); lastMillis=0;
     rawBuf.length=0; ppsBuf.length=0; filtPps=null; emaPps=null;
     if(currentRun && !currentRun.end) currentRun.end=new Date();
     currentRun=null;
@@ -183,7 +183,7 @@ function softReset(){
       }
 
       /* raw instantaneous pps */
-      const dt=(now-lastTime)/1000;
+      const dt = lastMillis ? (d.millis - lastMillis)/1000 : 0;
       if(dt>0 && pulses!==lastPulse){
         const rawPps=(pulses-lastPulse)/dt;
 
@@ -225,7 +225,7 @@ function softReset(){
         ws.send('stop'); armed=running=false; startPending=false;
       }
 
-      lastPulse=pulses; lastTime=now;
+      lastPulse=pulses; lastTime=now; lastMillis=d.millis;
     }
 
     /* 2️⃣ status messages ---------------------------------------------- */
@@ -251,7 +251,7 @@ function softReset(){
         if(d.status==='started'){
           armed=true; running=false; startPending=true;
           lastTime=lastChange=performance.now();
-          lastPulse=0;
+          lastPulse=0; lastMillis=0;
           timerEl.textContent='0.0 s';
           ppsEl.textContent='0';
           resultEl.textContent='';

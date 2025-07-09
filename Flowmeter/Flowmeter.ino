@@ -8,8 +8,11 @@
 
 const byte  FLOW_PIN      = 2;          // interrupt pin
 const byte  VALVE_SIG_PIN = 8;          // relay signal pin
+const byte  LED_PIN       = LED_BUILTIN; // signal reset acknowledgement
 const unsigned long BAUD  = 115200;
-const unsigned long INTERVAL_MS = 500;  // how often to send a CSV frame
+// Data frame interval. 200 ms gives a good balance between latency and
+// smoothing on the host side.
+const unsigned long INTERVAL_MS = 200;  // how often to send a CSV frame
 
 volatile unsigned long pulseCount = 0;
 
@@ -19,6 +22,8 @@ void setup() {
 
   pinMode(VALVE_SIG_PIN, OUTPUT);
   digitalWrite(VALVE_SIG_PIN, LOW);   // valve normally closed
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   Serial.begin(BAUD);
   Serial.println(F("ready"));           // banner for host script
@@ -33,6 +38,13 @@ void loop() {
       pulseCount = 0;
       interrupts();
       Serial.println(F("reset-ack"));   // confirmation
+      digitalWrite(LED_PIN, HIGH);      // short blink
+      delay(50);
+      digitalWrite(LED_PIN, LOW);
+      // send an immediate zero frame so the host updates right away
+      Serial.print(millis());
+      Serial.print(',');
+      Serial.println(pulseCount);
     } else if (c == 'o') {              // open valve
       digitalWrite(VALVE_SIG_PIN, HIGH);
 

@@ -1,6 +1,6 @@
 # Flowmeter Calibration Tools
 
-This repository contains a small Arduino sketch, Python bridge and web page
+This repository contains a small ESP8266 sketch, Python bridge and web page
 for visualising pulses from a hall‑effect flow sensor.
 
 ## Requirements
@@ -17,9 +17,9 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Upload `Flowmeter/Flowmeter.ino` to an Arduino or ESP8266 board. It prints
-   a CSV frame every 200 ms. Pulses are debounced in hardware using a
-   microsecond guard so spurious edges are ignored.
+1. Upload `Flowmeter/Flowmeter.ino` to an ESP8266 board. It prints a CSV frame
+   every 200 ms. Pulses are debounced in hardware using a microsecond guard so
+   spurious edges are ignored.
 2. Run `python3 flowmeter.py` and select the correct serial port.
 3. Open `index.html` in a browser.
 4. Enter the regulator version and supply pressure (in MPa) then press

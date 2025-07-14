@@ -2,7 +2,7 @@
 """
 flow_calibrator.py
 ──────────────────
-• Lists serial devices, lets you pick the Arduino.
+• Lists serial devices, lets you pick the ESP8266.
 • Relays CSV frames ("millis,pulses") to the browser via WebSocket.
 • Accepts 'start', 'stop', and 'reset' commands from the browser.
 """
@@ -34,9 +34,18 @@ class FlowServer:
     def __init__(self, port: str):
         print(f"🔗  Opening {port} @ {BAUD_RATE} …")
         self.ser = serial.Serial(port, BAUD_RATE, timeout=1)
+        time.sleep(2.0)  # allow ESP8266 reboot
 
-        banner = self.ser.readline().decode(errors="ignore").strip()
-        print(f"🖥  Arduino says: {banner or '<no banner>'}")
+        banner = ""
+        start = time.time()
+        while time.time() - start < 5:
+            line = self.ser.readline().decode(errors="ignore").strip()
+            if line:
+                banner = line
+                if line == "ready":
+                    break
+        print(f"🖥  ESP8266 says: {banner or '<no banner>'}")
+        self.ser.reset_input_buffer()
 
         self.latest_pulses = 0
         self.latest_millis = 0
@@ -53,12 +62,12 @@ class FlowServer:
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
 
     def send(self, cmd: str) -> None:
-        """Send a single-character command to the Arduino and log it."""
+        """Send a single-character command to the ESP8266 and log it."""
         self.ser.write(cmd.encode())
 
         self.ser.flush()
 
-        print(f"→ Arduino: {cmd}")
+        print(f"→ ESP8266: {cmd}")
 
     # ── serial→memory loop ────────────────────────────────────────────────
     async def serial_reader(self):
@@ -67,12 +76,12 @@ class FlowServer:
 
             if "," in line:                      # CSV data frame
                 parts = line.split(",")
-                if len(parts) >= 2:
+                if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
                     ms, pc = parts[0], parts[1]
                     self.latest_millis = int(ms)
                     self.latest_pulses = int(pc)
 
-            elif line == "reset-ack":            # Arduino confirmation
+            elif line == "reset-ack":            # ESP8266 confirmation
                 print("↳ reset acknowledged")
                 self.status_queue.append(json.dumps(
                     {"type":"status", "msg":"counter-reset"}))
@@ -143,7 +152,7 @@ class FlowServer:
 
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
-                    # reset Arduino counter so each run begins at zero
+                    # reset ESP8266 counter so each run begins at zero
                     self.send('r')                # reset
                     self.send('o')                # open valve
                     self.latest_pulses = 0
@@ -161,7 +170,7 @@ class FlowServer:
 
                 # ---- reset counter ----
                 elif cmd == "reset":
-                    self.send('r')                # tell Arduino
+                    self.send('r')                # tell ESP8266
                     self.latest_pulses = 0
                     self.latest_millis = 0
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))

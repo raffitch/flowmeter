@@ -160,8 +160,14 @@ class FlowServer:
                     self.pulse_start   = 0
                     self.t0            = time.time()
                     self.target_litres = float(data.get("volume", 1))
-                    self.target_pulses = data.get("pulses")
-                    self.target_seconds = data.get("seconds")
+                    pulses_val = data.get("pulses")
+                    seconds_val = data.get("seconds")
+                    self.target_pulses = (
+                        int(pulses_val) if isinstance(pulses_val, (int, float)) and pulses_val > 0 else None
+                    )
+                    self.target_seconds = (
+                        float(seconds_val) if isinstance(seconds_val, (int, float)) and seconds_val > 0 else None
+                    )
                     await ws.send(json.dumps({"type":"ack","status":"started"}))
 
                 # ---- stop calibration ----

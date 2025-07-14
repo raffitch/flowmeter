@@ -122,13 +122,14 @@
 
   function newRun(){
     const hue=(runs.length*60)%360;
+    const name=`Run ${runs.length+1}: ${regVerEl.value||'n/a'} — ${pressureInputEl.value||'n/a'} MPa`;
     const trace={
       x:[],
       y:[],
       mode:'lines',
       line:{color:`hsl(${hue},70%,40%)`},
-      name:`Run ${runs.length+1}`,
-      hovertemplate:'%{y:.1f} pps at %{x:.1f}s<extra></extra>'
+      name:name,
+      hovertemplate:`${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`
     };
     Plotly.addTraces(chartEl, trace);
     const idx = chartEl.data.length - 1;

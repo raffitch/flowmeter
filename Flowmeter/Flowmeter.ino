@@ -8,10 +8,19 @@
 
 const byte  FLOW_PIN      = 2;          // interrupt pin
 const byte  VALVE_SIG_PIN = 8;          // relay signal pin
+#ifdef ESP8266
+#  define LED_PIN LED_BUILTIN           // NodeMCU built‑in LED
+#else
+const byte  LED_PIN       = LED_BUILTIN; // signal reset acknowledgement
+#endif
 const unsigned long BAUD  = 115200;
-const unsigned long INTERVAL_MS = 500;  // how often to send a CSV frame
+// Data frame interval. 200 ms gives a good balance between latency and
+// smoothing on the host side.
+const unsigned long INTERVAL_MS = 200;  // how often to send a CSV frame
 
 volatile unsigned long pulseCount = 0;
+volatile unsigned long lastPulseUs = 0;      // for debouncing
+const unsigned long MIN_PULSE_US = 1000;     // ignore pulses <1 ms apart
 
 void setup() {
   pinMode(FLOW_PIN, INPUT_PULLUP);
@@ -19,6 +28,8 @@ void setup() {
 
   pinMode(VALVE_SIG_PIN, OUTPUT);
   digitalWrite(VALVE_SIG_PIN, LOW);   // valve normally closed
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   Serial.begin(BAUD);
   Serial.println(F("ready"));           // banner for host script
@@ -33,6 +44,13 @@ void loop() {
       pulseCount = 0;
       interrupts();
       Serial.println(F("reset-ack"));   // confirmation
+      digitalWrite(LED_PIN, HIGH);      // short blink
+      delay(50);
+      digitalWrite(LED_PIN, LOW);
+      // send an immediate zero frame so the host updates right away
+      Serial.print(millis());
+      Serial.print(',');
+      Serial.println(pulseCount);
     } else if (c == 'o') {              // open valve
       digitalWrite(VALVE_SIG_PIN, HIGH);
 
@@ -60,4 +78,13 @@ void loop() {
   }
 }
 
-void countPulse() { pulseCount++; }
+#ifdef ESP8266
+IRAM_ATTR
+#endif
+void countPulse() {
+  unsigned long now = micros();
+  if (now - lastPulseUs >= MIN_PULSE_US) {
+    pulseCount++;
+    lastPulseUs = now;
+  }
+}

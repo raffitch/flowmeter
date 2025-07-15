@@ -239,28 +239,18 @@ function softReset(){
         saveCsvBtn.disabled=savePngBtn.disabled=false;
       }
       if(d.msg==='counter-reset'){
-        const wasPending=startPending;
-        softReset();
         resultEl.textContent='Counter reset ✔︎';
-        if(wasPending){
-          newRun();
-          currentRun.start=new Date();
-          armed=true; running=true; startPending=false;
-          t0=lastChange=performance.now();
-          startBtn.disabled=true; stopBtn.disabled=false;
-        }
       }
     }
 
     /* 3️⃣ acknowledgements --------------------------------------------- */
     if(d.type==='ack'){
         if(d.status==='started'){
-          armed=true; running=false; startPending=true;
-          lastTime=lastChange=performance.now();
-          lastPulse=0; lastMillis=0;
-          timerEl.textContent='0.0 s';
-          ppsEl.textContent='0';
-          resultEl.textContent='';
+          softReset();
+          newRun();
+          currentRun.start=new Date();
+          armed=true; running=true; startPending=false;
+          t0=lastChange=performance.now();
           startBtn.disabled=true; stopBtn.disabled=false;
         }
       if(d.status==='reset-sent'){resultEl.textContent='Reset request sent…';}

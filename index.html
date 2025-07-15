@@ -243,7 +243,10 @@ function softReset(){
         softReset();
         resultEl.textContent='Counter reset ✔︎';
         if(wasPending){
-          armed=true; startPending=true;
+          newRun();
+          currentRun.start=new Date();
+          armed=true; running=true; startPending=false;
+          t0=lastChange=performance.now();
           startBtn.disabled=true; stopBtn.disabled=false;
         }
       }

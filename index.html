@@ -34,6 +34,7 @@
 <div>Supply pressure (MPa) <input id="supplyPressure" type="text" style="width:6em"></div>
 <div>Stop after pulses <input id="targetCounts" type="number" min="1" step="1" style="width:6em"></div>
 <div>Stop after seconds <input id="targetSeconds" type="number" min="1" step="1" style="width:6em"></div>
+<div><label><input id="autoStop" type="checkbox" checked> auto-stop when pulses stop</label></div>
 
 <button id="start"  disabled>Start</button>
 <button id="stop"   disabled>Stop</button>
@@ -64,6 +65,7 @@
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
         regVerEl=$('regVersion'), pressureInputEl=$('supplyPressure'),
         targetCountsEl=$('targetCounts'), targetSecondsEl=$('targetSeconds'),
+        autoStopEl=$('autoStop'),
         chartEl=$('flowChart'), logList=$('logList');
 
   /* --- Plotly chart (interactive zoom & hover) --- */
@@ -85,7 +87,7 @@
   const runs=[];                 // store all runs
   let currentRun=null;           // {traceIndex, trace, volume, regulator, pressure, start,end}
   let globalMax=0;
-  const NO_FLOW_MS = 3000;    // wait longer before auto-stop
+  const NO_FLOW_MS = 1000;    // auto-stop after 1s without pulses
 
   /* --- helpers: downloads --- */
   function downloadCsv(){
@@ -222,7 +224,7 @@ function softReset(){
       if(running) timerEl.textContent=`${((now-t0)/1000).toFixed(1)} s`;
 
       /* auto-stop after NO_FLOW_MS of zero-increment */
-      if(running && now-lastChange>NO_FLOW_MS){
+      if(autoStopEl.checked && running && now-lastChange>NO_FLOW_MS){
         ws.send('stop'); armed=running=false; startPending=false;
       }
 

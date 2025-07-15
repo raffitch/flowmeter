@@ -33,7 +33,8 @@ Supply pressure field.
 The interface shows live pulses per second. A median filter removes single-frame
 spikes, then a one‑second moving average and exponential smoothing clean up
 outliers. Calibration can optionally stop after a specified number of pulses or
-elapsed seconds.
+elapsed seconds. Enable the **auto-stop** checkbox to end a run when the pulse
+count hasn't changed for roughly a second.
 
 Plotly is used for plotting, providing zoomable curves and hover details. Each
 run is drawn as a separate trace with its pressure and regulator version in the

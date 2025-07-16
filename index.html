@@ -125,6 +125,8 @@
     lastPulse=0; lastWeight=0; lastMillis=0; startWeight=0;
     if(current && !current.end) current.end=new Date();
     current=null;
+    startBtn.disabled=false;
+    stopBtn.disabled=true;
   }
   function hardReset(){
     softReset();
@@ -135,7 +137,14 @@
   }
 
   const ws = new WebSocket('ws://localhost:8765');
-  ws.onopen = () => { statusEl.textContent='🟢 WebSocket open'; startBtn.disabled=resetBtn.disabled=resetAllBtn.disabled=false; saveCsvBtn.disabled=savePngBtn.disabled=false; };
+  ws.onopen = () => {
+    statusEl.textContent='🟢 WebSocket open';
+    startBtn.disabled=false;
+    resetBtn.disabled=false;
+    resetAllBtn.disabled=false;
+    saveCsvBtn.disabled=false;
+    savePngBtn.disabled=false;
+  };
   ws.onerror= () => { statusEl.textContent='🔴 WebSocket error'; };
 
   ws.onmessage = ev => {
@@ -177,7 +186,9 @@
       }
 
       if(autoStopEl.checked && running && now-lastChange>1000){
-        ws.send('stop'); running=false; startPend=false; armed=false;
+        ws.send('stop');
+        running=false; startPend=false; armed=false;
+        startBtn.disabled=false; stopBtn.disabled=true;
       }
       if(running) elapsedEl.textContent=((now-t0)/1000).toFixed(1)+' s';
 
@@ -186,10 +197,19 @@
 
     if(d.type==='status'){ if(d.msg==='counter-reset'){ resultEl.textContent='Counter reset'; } }
 
-    if(d.type==='ack' && d.status==='started'){ softReset(); armed=true; startPend=true; }
+    if(d.type==='ack' && d.status==='started'){
+      softReset();
+      armed=true;
+      startPend=true;
+      startBtn.disabled=true;
+      stopBtn.disabled=false;
+    }
 
     if(d.type==='cal'){
-      armed=running=false; startPend=false; elapsedEl.textContent=d.elapsed.toFixed(1)+' s';
+      armed=running=false; startPend=false;
+      startBtn.disabled=false;
+      stopBtn.disabled=true;
+      elapsedEl.textContent=d.elapsed.toFixed(1)+' s';
       if(current){ Object.assign(current,{end:new Date(),delta:d.delta,elapsed:d.elapsed,pps:d.pps,rate:d.rate,sensor:d.sensor}); addLog(current); current=null; }
       if(d.sensor==='scale'){ resultEl.textContent=(d.rate/1000).toFixed(3)+' L/s'; }
       else { resultEl.textContent=d.pps+' pps'; }
@@ -218,9 +238,15 @@
   }
 
   startBtn.onclick = () => {
+    startBtn.disabled=true;
+    stopBtn.disabled=false;
     ws.send(JSON.stringify({cmd:'start',volume:VOLUME_L,sensor:sensor,pulses:sensor==='flow'&&targetPEl.value?Number(targetPEl.value):undefined,weight:sensor==='scale'&&targetWEl.value?Number(targetWEl.value):undefined,seconds:targetSEl.value?Number(targetSEl.value):undefined}));
   };
-  stopBtn.onclick = () => { ws.send('stop'); running=false; startPend=false; armed=false; };
+  stopBtn.onclick = () => {
+    ws.send('stop');
+    running=false; startPend=false; armed=false;
+    startBtn.disabled=false; stopBtn.disabled=true;
+  };
   resetBtn.onclick = () => { ws.send('reset'); softReset(); };
   resetAllBtn.onclick = () => { ws.send('reset'); hardReset(); };
   saveCsvBtn.onclick = () => { downloadCsv(); };

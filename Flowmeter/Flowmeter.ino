@@ -49,6 +49,10 @@ void setup() {
 
   // ── initialise HX711 scale -------------------------------------------
   scale.begin(HX_PIN_DOUT, HX_PIN_SCK);
+  unsigned long t0 = millis();
+  while (!scale.is_ready() && millis() - t0 < 1000) {
+    // wait for the amplifier to settle
+  }
   hxReady = scale.is_ready();
   if (hxReady) {
     long acc = 0;

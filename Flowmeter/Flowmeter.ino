@@ -6,8 +6,13 @@
  *   Black   → GND
  */
 
+#ifdef ESP8266
+const byte  FLOW_PIN      = D2;         // flow sensor signal
+const byte  VALVE_SIG_PIN = D4;         // relay signal
+#else
 const byte  FLOW_PIN      = 2;          // interrupt pin
 const byte  VALVE_SIG_PIN = 8;          // relay signal pin
+#endif
 #ifdef ESP8266
 #  define LED_PIN LED_BUILTIN           // NodeMCU built‑in LED
 #else
@@ -50,8 +55,8 @@ void setup() {
   // ── initialise HX711 scale -------------------------------------------
   scale.begin(HX_PIN_DOUT, HX_PIN_SCK);
   unsigned long t0 = millis();
-  while (!scale.is_ready() && millis() - t0 < 1000) {
-    // wait for the amplifier to settle
+  while (!scale.is_ready() && millis() - t0 < 3000) {
+    // wait for the amplifier to settle (up to 3 s)
   }
   hxReady = scale.is_ready();
   if (hxReady) {
@@ -61,6 +66,8 @@ void setup() {
       acc += scale.read();
     }
     hxOffset = acc / TARE_READS;
+  } else {
+    Serial.println(F("hx711-not-ready"));
   }
 
   Serial.begin(BAUD);

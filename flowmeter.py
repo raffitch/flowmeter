@@ -2,7 +2,7 @@
 """
 flow_calibrator.py
 ──────────────────
-• Lists serial devices, lets you pick the Arduino.
+• Lists serial devices, lets you pick the ESP8266.
 • Relays CSV frames ("millis,pulses") to the browser via WebSocket.
 • Accepts 'start', 'stop', and 'reset' commands from the browser.
 """
@@ -34,29 +34,44 @@ class FlowServer:
     def __init__(self, port: str):
         print(f"🔗  Opening {port} @ {BAUD_RATE} …")
         self.ser = serial.Serial(port, BAUD_RATE, timeout=1)
+        time.sleep(2.0)  # allow ESP8266 reboot
 
-        banner = self.ser.readline().decode(errors="ignore").strip()
-        print(f"🖥  Arduino says: {banner or '<no banner>'}")
+        banner = ""
+        start = time.time()
+        while time.time() - start < 5:
+            line = self.ser.readline().decode(errors="ignore").strip()
+            if line:
+                banner = line
+                if line == "ready":
+                    break
+        print(f"🖥  ESP8266 says: {banner or '<no banner>'}")
+        self.ser.reset_input_buffer()
 
         self.latest_pulses = 0
         self.latest_millis = 0
+        self.latest_weight = None
         self.clients       = set()
 
         # calibration state
-        self.cal_running  = False
-        self.pulse_start  = 0
-        self.t0           = 0.0
+        self.cal_running   = False
+        self.pulse_start   = 0
+        self.weight_start  = 0.0
+        self.current_sensor = "flow"
+        self.t0            = 0.0
         self.target_litres = 1.0
+        self.target_pulses = None
+        self.target_weight = None
+        self.target_seconds = None
 
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
 
     def send(self, cmd: str) -> None:
-        """Send a single-character command to the Arduino and log it."""
+        """Send a single-character command to the ESP8266 and log it."""
         self.ser.write(cmd.encode())
 
         self.ser.flush()
 
-        print(f"→ Arduino: {cmd}")
+        print(f"→ ESP8266: {cmd}")
 
     # ── serial→memory loop ────────────────────────────────────────────────
     async def serial_reader(self):
@@ -64,11 +79,19 @@ class FlowServer:
             line = self.ser.readline().decode(errors="ignore").strip()
 
             if "," in line:                      # CSV data frame
-                ms, pc              = line.split(",")
-                self.latest_millis  = int(ms)
-                self.latest_pulses  = int(pc)
+                parts = line.split(",")
+                if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                    ms, pc = parts[0], parts[1]
+                    self.latest_millis = int(ms)
+                    self.latest_pulses = int(pc)
+                    if len(parts) >= 3:
+                        try:
+                            self.latest_weight = float(parts[2])
+                        except ValueError:
+                            pass
 
-            elif line == "reset-ack":            # Arduino confirmation
+            elif line == "reset-ack":            # ESP8266 confirmation
+                print("↳ reset acknowledged")
                 self.status_queue.append(json.dumps(
                     {"type":"status", "msg":"counter-reset"}))
             elif line == "valve-open":
@@ -85,13 +108,55 @@ class FlowServer:
                 msg = json.dumps({
                     "type":   "live",
                     "millis": self.latest_millis,
-                    "pulses": self.latest_pulses
+                    "pulses": self.latest_pulses,
+                    "weight": self.latest_weight
                 })
                 await asyncio.gather(
                     *(c.send(msg) for c in self.clients),
                     return_exceptions=True
                 )
+
+            if self.cal_running:
+                if self.current_sensor == "scale" and self.target_weight is not None:
+                    if (self.latest_weight or 0) - self.weight_start >= self.target_weight:
+                        await self.finish_calibration()
+                if self.current_sensor == "flow" and self.target_pulses is not None:
+                    if self.latest_pulses - self.pulse_start >= self.target_pulses:
+                        await self.finish_calibration()
+                if self.target_seconds is not None:
+                    if time.time() - self.t0 >= self.target_seconds:
+                        await self.finish_calibration()
             await asyncio.sleep(LIVE_INTERVAL)
+
+    async def finish_calibration(self):
+        """Stop calibration, close valve and broadcast result."""
+        self.send('c')
+        self.cal_running = False
+        elapsed = time.time() - self.t0
+        if self.current_sensor == "scale":
+            delta = (self.latest_weight or 0) - self.weight_start
+            rate = delta / elapsed if elapsed > 0 else 0
+            msg = json.dumps({
+                "type": "cal",
+                "sensor": "scale",
+                "delta": round(delta, 2),
+                "elapsed": round(elapsed, 2),
+                "rate": round(rate, 2)
+            })
+        else:
+            delta = self.latest_pulses - self.pulse_start
+            rate = delta / elapsed if elapsed > 0 else 0
+            msg = json.dumps({
+                "type": "cal",
+                "sensor": "flow",
+                "delta": delta,
+                "elapsed": round(elapsed, 2),
+                "pps": round(rate, 2)
+            })
+        await asyncio.gather(*(c.send(msg) for c in self.clients), return_exceptions=True)
+        self.target_pulses = None
+        self.target_weight = None
+        self.target_seconds = None
 
     # ── websocket handler ────────────────────────────────────────────────
     async def ws_handler(self, ws):
@@ -112,34 +177,40 @@ class FlowServer:
 
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
-                    # reset Arduino counter so each run begins at zero
+                    # reset ESP8266 counter so each run begins at zero
                     self.send('r')                # reset
                     self.send('o')                # open valve
                     self.latest_pulses = 0
                     self.cal_running   = True
                     self.pulse_start   = 0
+                    self.weight_start  = self.latest_weight or 0.0
+                    self.current_sensor = data.get("sensor", "flow")
                     self.t0            = time.time()
                     self.target_litres = float(data.get("volume", 1))
+                    pulses_val = data.get("pulses")
+                    weight_val = data.get("weight")
+                    seconds_val = data.get("seconds")
+                    self.target_pulses = (
+                        int(pulses_val) if isinstance(pulses_val, (int, float)) and pulses_val > 0 else None
+                    )
+                    self.target_weight = (
+                        float(weight_val) if isinstance(weight_val, (int, float)) and weight_val > 0 else None
+                    )
+                    self.target_seconds = (
+                        float(seconds_val) if isinstance(seconds_val, (int, float)) and seconds_val > 0 else None
+                    )
                     await ws.send(json.dumps({"type":"ack","status":"started"}))
 
                 # ---- stop calibration ----
                 elif cmd == "stop" and self.cal_running:
-                    self.send('c')                # close valve
-                    self.cal_running = False
-                    delta   = self.latest_pulses - self.pulse_start
-                    elapsed = time.time() - self.t0
-                    ppl = delta / self.target_litres if self.target_litres else 0
-                    await ws.send(json.dumps({
-                        "type":   "cal",
-                        "delta":  delta,
-                        "elapsed": round(elapsed, 2),
-                        "volume": self.target_litres,
-                        "ppl":    round(ppl, 2)
-                    }))
+                    await self.finish_calibration()
 
                 # ---- reset counter ----
                 elif cmd == "reset":
-                    self.send('r')                # tell Arduino
+                    self.send('r')                # tell ESP8266
+                    self.latest_pulses = 0
+                    self.latest_millis = 0
+                    self.latest_weight = None
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
         finally:
             self.clients.discard(ws)

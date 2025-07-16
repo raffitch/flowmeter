@@ -160,10 +160,19 @@
           running=true; startPend=false; t0=now; lastChange=now; startWeight=d.weight; newRun();
         }
         if(running && current){
-          const t=(now-t0)/1000;
-          const rate = t>0 ? (d.weight-startWeight)/1000/t : 0;
-          addPoint(t, rate);
-          if(t>0) avgEl.textContent=rate.toFixed(3);
+          const dt = lastMillis ? (d.millis - lastMillis)/1000 : 0;
+          if(dt>0){
+            const inst = (d.weight - lastWeight)/dt/1000;
+            rawBuf.push(inst); if(rawBuf.length>MEDIAN_WINDOW) rawBuf.shift();
+            const mid=[...rawBuf].sort((a,b)=>a-b)[Math.floor(rawBuf.length/2)];
+            avgBuf.push(mid); if(avgBuf.length>MA_WINDOW) avgBuf.shift();
+            const m=avgBuf.reduce((a,b)=>a+b,0)/avgBuf.length;
+            ema=ema===null?m:EMA_ALPHA*m+(1-EMA_ALPHA)*ema;
+            const rate=ema;
+            const t=(now-t0)/1000;
+            addPoint(t, rate);
+            avgEl.textContent=rate.toFixed(3);
+          }
         }
         if(d.weight!==lastWeight) lastChange=now;
       }else{

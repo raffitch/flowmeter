@@ -17,9 +17,11 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Upload `Flowmeter/Flowmeter.ino` to an ESP8266 board. It prints a CSV frame
-   roughly every 150 ms. Pulses are debounced in hardware and, if a HX711 scale is
-   connected, weight is streamed alongside the pulse count.
+1. Upload `Flowmeter/Flowmeter.ino` to an ESP8266 board. The sketch expects the
+   flow sensor on pin **D2**, the valve control on **D8** and the HX711 on **D6/D7**.
+   It prints a CSV frame roughly every 150 ms. Pulses are debounced in hardware
+   and, if a HX711 scale is connected, weight is streamed alongside the pulse
+   count.
 2. Run `python3 flowmeter.py` and select the correct serial port.
 3. Open `index.html` in a browser.
 4. Enter the regulator version and supply pressure (in MPa). Choose whether to

@@ -8,7 +8,7 @@
 
 #ifdef ESP8266
 const byte  FLOW_PIN      = D2;         // flow sensor signal
-const byte  VALVE_SIG_PIN = D4;         // relay signal
+const byte  VALVE_SIG_PIN = D8;         // relay signal
 #else
 const byte  FLOW_PIN      = 2;          // interrupt pin
 const byte  VALVE_SIG_PIN = 8;          // relay signal pin

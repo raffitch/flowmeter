@@ -96,13 +96,14 @@
     Plotly.relayout(chartDiv,{yaxis:{title:isFlow?'pulses / s':'grams',rangemode:'tozero'}});
   }
   sensorEl.onchange = updateSensor;
-  updateSensor();
 
   Plotly.newPlot(chartDiv, [], {
     xaxis:{title:'time (s)', range:[0,90]},
     yaxis:{title:'pulses / s', rangemode:'tozero'},
     margin:{l:40,r:10,b:40,t:10}
   }, {responsive:true, displaylogo:false, scrollZoom:true});
+
+  updateSensor();
 
   let armed=false, running=false, startPend=false;
   let lastPulse=0, lastWeight=0, lastMillis=0;

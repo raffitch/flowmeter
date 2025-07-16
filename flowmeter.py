@@ -11,7 +11,7 @@ import argparse, asyncio, json, sys, time, pathlib, webbrowser
 import serial, serial.tools.list_ports, websockets
 
 BAUD_RATE     = 115_200
-LIVE_INTERVAL = 0.2                       # seconds
+LIVE_INTERVAL = 0.15                      # seconds
 WS_HOST, WS_PORT = "localhost", 8765
 
 # ── helper: choose serial port ─────────────────────────────────────────────

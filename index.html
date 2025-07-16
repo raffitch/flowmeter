@@ -66,9 +66,9 @@
 
 <script>
 (() => {
-  const MEDIAN_WINDOW = 5;
-  const MA_WINDOW = 5;
-  const EMA_ALPHA = 0.5;
+  const MEDIAN_WINDOW = 3;
+  const MA_WINDOW = 3;
+  const EMA_ALPHA = 0.7;
   const VOLUME_L = 1;
 
   const $ = id => document.getElementById(id);
@@ -93,7 +93,7 @@
     limitPulse.style.display= isFlow ? '' : 'none';
     weightBox.style.display = isFlow ? 'none' : '';
     limitWeight.style.display = isFlow ? 'none' : '';
-    Plotly.relayout(chartDiv,{yaxis:{title:isFlow?'pulses / s':'grams',rangemode:'tozero'}});
+    Plotly.relayout(chartDiv,{yaxis:{title:isFlow?'pulses / s':'L / s',rangemode:'tozero'}});
   }
   sensorEl.onchange = updateSensor;
 
@@ -161,8 +161,9 @@
         }
         if(running && current){
           const t=(now-t0)/1000;
-          addPoint(t,d.weight);
-          if(t>0) avgEl.textContent=((d.weight-startWeight)/1000/t).toFixed(3);
+          const rate = t>0 ? (d.weight-startWeight)/1000/t : 0;
+          addPoint(t, rate);
+          if(t>0) avgEl.textContent=rate.toFixed(3);
         }
         if(d.weight!==lastWeight) lastChange=now;
       }else{
@@ -185,7 +186,7 @@
         if(d.pulses!==lastPulse) lastChange=now;
       }
 
-      if(autoStopEl.checked && running && now-lastChange>1000){
+      if(autoStopEl.checked && running && now-lastChange>800){
         ws.send('stop');
         running=false; startPend=false; armed=false;
         startBtn.disabled=false; stopBtn.disabled=true;
@@ -224,7 +225,7 @@
   function newRun(){
     const hue=(runs.length*60)%360;
     const name=`Run ${runs.length+1}: ${regEl.value||'n/a'} — ${pressEl.value||'n/a'} MPa`;
-    const trace={x:[],y:[],mode:'lines',line:{color:`hsl(${hue},70%,40%)`},name:name,hovertemplate:sensor==='scale'?`${name}<br>%{y:.1f} g at %{x:.1f}s<extra></extra>`:`${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`};
+    const trace={x:[],y:[],mode:'lines',line:{color:`hsl(${hue},70%,40%)`},name:name,hovertemplate:sensor==='scale'?`${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`:`${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`};
     Plotly.addTraces(chartDiv, trace);
     current={idx:chartDiv.data.length-1, trace:trace, sensor:sensor, volume:VOLUME_L, regulator:regEl.value, pressure:pressEl.value, start:new Date(), end:null};
     runs.push(current);
@@ -262,7 +263,7 @@
       csv+=`# volume_L=${r.volume}\n`;
       csv+=`# regulator_version=${r.regulator}\n`;
       csv+=`# supply_pressure=${r.pressure}\n`;
-      csv+= r.sensor==='scale' ? 'time_s,grams\n' : 'time_s,pps_filtered\n';
+      csv+= r.sensor==='scale' ? 'time_s,L_per_s\n' : 'time_s,pps_filtered\n';
       r.trace.x.forEach((x,i)=>{ csv+=`${x},${r.trace.y[i]}\n`; });
       csv+='\n';
     });

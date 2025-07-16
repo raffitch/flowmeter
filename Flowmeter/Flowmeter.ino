@@ -19,9 +19,9 @@ const byte  VALVE_SIG_PIN = 8;          // relay signal pin
 const byte  LED_PIN       = LED_BUILTIN; // signal reset acknowledgement
 #endif
 const unsigned long BAUD  = 115200;
-// Data frame interval. 200 ms gives a good balance between latency and
-// smoothing on the host side.
-const unsigned long INTERVAL_MS = 200;  // how often to send a CSV frame
+// Data frame interval. 150 ms keeps the host responsive while still
+// smoothing a little on the ESP8266 side.
+const unsigned long INTERVAL_MS = 150;  // how often to send a CSV frame
 
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastPulseUs = 0;      // for debouncing
@@ -37,7 +37,7 @@ constexpr byte HX_PIN_DOUT = 2;
 constexpr byte HX_PIN_SCK  = 3;
 #endif
 HX711 scale;
-constexpr float COUNTS_PER_GRAM = -1662.567f;  // adjust after calibration
+constexpr float COUNTS_PER_GRAM = -1115.637f;  // adjust after calibration
 constexpr byte  TARE_READS = 20;
 constexpr byte  HX_AVG = 8;                    // averaging reads
 long hxOffset = 0;

@@ -12,6 +12,7 @@
   #status{margin:.8rem 0;font-size:.95rem;color:#555}
   #chart {width:100%;height:260px;margin-top:1rem;border:1px solid #ccc}
 </style>
+<script>window.PlotlyConfig={};</script>
 <script src="https://cdn.plot.ly/plotly-2.31.0.min.js"></script>
 </head>
 <body>
@@ -79,14 +80,16 @@
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
         pulsesBox=$('pulsesBox'), weightBox=$('weightBox'), avgBox=$('avgBox'),
         limitPulse=$('limitPulse'), limitWeight=$('limitWeight'),
-        autoStopEl=$('autoStop'), chartDiv=$('chart'), logEl=$('log');
+        autoStopEl=$('autoStop'), chartDiv=$('chart'), logEl=$('log'),
+        resultEl=$('result'), avgLabel=avgBox.firstElementChild;
 
   let sensor = 'flow';
   function updateSensor() {
     sensor = sensorEl.value;
     const isFlow = sensor === 'flow';
     pulsesBox.style.display = isFlow ? '' : 'none';
-    avgBox.style.display    = isFlow ? '' : 'none';
+    avgBox.style.display    = '';
+    avgLabel.textContent    = isFlow ? 'Average pulses / s' : 'Average L/s';
     limitPulse.style.display= isFlow ? '' : 'none';
     weightBox.style.display = isFlow ? 'none' : '';
     limitWeight.style.display = isFlow ? 'none' : '';
@@ -109,6 +112,7 @@
   const runs=[];
   let current=null;
   let xMax=0;
+  let startWeight=0;
 
   function softReset(){
     pulsesEl.textContent='0';
@@ -117,7 +121,7 @@
     avgEl.textContent='0';
     ema=filt=null; rawBuf.length=0; avgBuf.length=0;
     armed=running=startPend=false;
-    lastPulse=0; lastWeight=0; lastMillis=0;
+    lastPulse=0; lastWeight=0; lastMillis=0; startWeight=0;
     if(current && !current.end) current.end=new Date();
     current=null;
   }
@@ -142,10 +146,13 @@
       if(d.weight!=null) weightEl.textContent=d.weight.toFixed(1);
 
       if(sensor==='scale'){
-        if(armed && !running && d.weight!==lastWeight){ running=true; startPend=false; t0=now; lastChange=now; newRun(); }
+        if(armed && !running && d.weight!==lastWeight){
+          running=true; startPend=false; t0=now; lastChange=now; startWeight=d.weight; newRun();
+        }
         if(running && current){
           const t=(now-t0)/1000;
           addPoint(t,d.weight);
+          if(t>0) avgEl.textContent=((d.weight-startWeight)/1000/t).toFixed(3);
         }
         if(d.weight!==lastWeight) lastChange=now;
       }else{
@@ -183,7 +190,7 @@
     if(d.type==='cal'){
       armed=running=false; startPend=false; elapsedEl.textContent=d.elapsed.toFixed(1)+' s';
       if(current){ Object.assign(current,{end:new Date(),delta:d.delta,elapsed:d.elapsed,pps:d.pps,rate:d.rate,sensor:d.sensor}); addLog(current); current=null; }
-      if(d.sensor==='scale'){ resultEl.textContent=d.rate+' g/s'; }
+      if(d.sensor==='scale'){ resultEl.textContent=(d.rate/1000).toFixed(3)+' L/s'; }
       else { resultEl.textContent=d.pps+' pps'; }
     }
   };
@@ -204,7 +211,7 @@
   function addLog(r){
     const li=document.createElement('li');
     const dur=(r.elapsed||0).toFixed(1);
-    if(r.sensor==='scale'){ li.textContent=`${r.start.toLocaleString()} — ${dur}s, ${(r.rate||0).toFixed(1)} g/s (${r.delta.toFixed(1)} g)`; }
+    if(r.sensor==='scale'){ li.textContent=`${r.start.toLocaleString()} — ${dur}s, ${(r.rate/1000||0).toFixed(3)} L/s (${r.delta.toFixed(1)} g)`; }
     else { li.textContent=`${r.start.toLocaleString()} — ${dur}s, ${(r.pps||0).toFixed(1)} pps (${r.delta} pulses)`; }
     logEl.appendChild(li);
   }

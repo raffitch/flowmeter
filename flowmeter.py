@@ -93,9 +93,10 @@ class FlowServer:
                             pass
 
             elif line in ("reset-ack", "tare-ack"):
+                if line == "tare-ack":
+                    self.weight_offset = 0.0  # ESP now reports zero-based weight
                 print("↳ reset acknowledged" if line=="reset-ack" else "↳ tare acknowledged")
-                self.status_queue.append(json.dumps(
-                    {"type":"status", "msg":"reset"}))
+                self.status_queue.append(json.dumps({"type":"status", "msg":"reset"}))
             elif line == "valve-open":
                 print("🟢 Valve opened")
             elif line == "valve-closed":

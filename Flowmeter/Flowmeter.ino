@@ -6,18 +6,9 @@
  *   Black   → GND
  */
 
-#ifdef ESP8266
 const byte  FLOW_PIN      = D2;         // flow sensor signal
-const byte  VALVE_SIG_PIN = D8;         // relay signal
-#else
-const byte  FLOW_PIN      = 2;          // interrupt pin
-const byte  VALVE_SIG_PIN = 8;          // relay signal pin
-#endif
-#ifdef ESP8266
-#  define LED_PIN LED_BUILTIN           // NodeMCU built‑in LED
-#else
-const byte  LED_PIN       = LED_BUILTIN; // signal reset acknowledgement
-#endif
+const byte  VALVE_SIG_PIN = D8;         // relay signal pin
+const byte  LED_PIN       = LED_BUILTIN; // on-board LED for feedback
 const unsigned long BAUD  = 115200;
 // Data frame interval. 150 ms keeps the host responsive while still
 // smoothing a little on the ESP8266 side.
@@ -29,13 +20,8 @@ const unsigned long MIN_PULSE_US = 1000;     // ignore pulses <1 ms apart
 
 // ── HX711 scale support ─────────────────────────────────────────────
 #include <HX711.h>
-#ifdef ESP8266
 constexpr byte HX_PIN_DOUT = D6;  // DT on NodeMCU v2
 constexpr byte HX_PIN_SCK  = D7;  // SCK on NodeMCU v2
-#else
-constexpr byte HX_PIN_DOUT = 2;
-constexpr byte HX_PIN_SCK  = 3;
-#endif
 HX711 scale;
 constexpr float COUNTS_PER_GRAM = -1115.637f;  // adjust after calibration
 constexpr byte  TARE_READS = 20;
@@ -83,7 +69,7 @@ void loop() {
       pulseCount = 0;
       interrupts();
 
-      if (hxReady && scale.is_ready()) {
+      if (hxReady) {
         long acc = 0;
         for (byte i = 0; i < TARE_READS; ++i) {
           while (!scale.is_ready()) {}
@@ -100,7 +86,7 @@ void loop() {
       Serial.print(millis());
       Serial.print(',');
       Serial.print(pulseCount);
-      if (hxReady && scale.is_ready()) {
+      if (hxReady) {
         long acc = 0;
         for (byte i = 0; i < HX_AVG; ++i) acc += scale.read();
         long raw = acc / HX_AVG;
@@ -129,7 +115,7 @@ void loop() {
     interrupts();
 
     float g = NAN;
-    if (hxReady && scale.is_ready()) {
+    if (hxReady) {
       long acc = 0;
       for (byte i = 0; i < HX_AVG; ++i) acc += scale.read();
       long raw = acc / HX_AVG;
@@ -149,10 +135,7 @@ void loop() {
   }
 }
 
-#ifdef ESP8266
-IRAM_ATTR
-#endif
-void countPulse() {
+IRAM_ATTR void countPulse() {
   unsigned long now = micros();
   if (now - lastPulseUs >= MIN_PULSE_US) {
     pulseCount++;

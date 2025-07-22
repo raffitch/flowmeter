@@ -54,7 +54,7 @@
 
 <button id="start" disabled>Start</button>
 <button id="stop" disabled>Stop</button>
-<button id="reset" disabled>Reset pulses</button>
+<button id="reset" disabled>Reset</button>
 <button id="resetAll" disabled>Reset all</button>
 <button id="saveCsv" disabled>Save CSV</button>
 <button id="savePng" disabled>Save PNG</button>
@@ -87,13 +87,14 @@
   function updateSensor() {
     sensor = sensorEl.value;
     const isFlow = sensor === 'flow';
-    pulsesBox.style.display = isFlow ? '' : 'none';
-    avgBox.style.display    = '';
-    avgLabel.textContent    = isFlow ? 'Average pulses / s' : 'Average L/s';
-    limitPulse.style.display= isFlow ? '' : 'none';
-    weightBox.style.display = isFlow ? 'none' : '';
-    limitWeight.style.display = isFlow ? 'none' : '';
-    Plotly.relayout(chartDiv,{yaxis:{title:isFlow?'pulses / s':'L / s',rangemode:'tozero'}});
+    pulsesBox.style.display  = isFlow ? '' : 'none';
+    avgBox.style.display     = '';
+    avgLabel.textContent     = isFlow ? 'Average pulses / s' : 'Average L/s';
+    limitPulse.style.display = isFlow ? '' : 'none';
+    weightBox.style.display  = isFlow ? 'none' : '';
+    limitWeight.style.display= isFlow ? 'none' : '';
+    resetBtn.textContent     = isFlow ? 'Reset pulses' : 'Tare scale';
+    Plotly.relayout(chartDiv, {yaxis:{title:isFlow?'pulses / s':'L / s', rangemode:'tozero'}});
   }
   sensorEl.onchange = updateSensor;
 
@@ -205,7 +206,11 @@
       lastPulse=d.pulses; lastWeight=d.weight; lastMillis=d.millis;
     }
 
-    if(d.type==='status'){ if(d.msg==='counter-reset'){ resultEl.textContent='Counter reset'; } }
+    if(d.type==='status'){
+      if(d.msg==='reset'){
+        resultEl.textContent = sensor==='scale' ? 'Scale tared' : 'Counter reset';
+      }
+    }
 
     if(d.type==='ack' && d.status==='started'){
       softReset();

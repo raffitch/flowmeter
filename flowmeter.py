@@ -93,7 +93,7 @@ class FlowServer:
             elif line == "reset-ack":            # ESP8266 confirmation
                 print("↳ reset acknowledged")
                 self.status_queue.append(json.dumps(
-                    {"type":"status", "msg":"counter-reset"}))
+                    {"type":"status", "msg":"reset"}))
             elif line == "valve-open":
                 print("🟢 Valve opened")
             elif line == "valve-closed":
@@ -210,7 +210,7 @@ class FlowServer:
                     self.send('r')                # tell ESP8266
                     self.latest_pulses = 0
                     self.latest_millis = 0
-                    self.latest_weight = None
+                    self.latest_weight = 0.0
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
         finally:
             self.clients.discard(ws)

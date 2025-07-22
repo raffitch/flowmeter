@@ -40,6 +40,9 @@ flow sensor data. Calibration can stop after a specified number of pulses,
 grams or elapsed seconds. Auto‑stop ends a run if the selected sensor doesn't
 change for about a second.
 
+Pressing **Reset** clears the current run. When the scale sensor is selected it
+also tares the HX711 so the weight reading returns to zero.
+
 Plotly is used for plotting, providing zoomable curves and hover details. Each
 run is drawn as a separate trace with its pressure and regulator version in the
 legend so multiple runs overlay for easy comparison, and completed runs are

@@ -78,10 +78,20 @@ void loop() {
   /* -------- handle incoming commands -------- */
   while (Serial.available() > 0) {
     char c = Serial.read();
-    if (c == 'r') {                     // reset counter
+    if (c == 'r') {                     // reset counter / tare scale
       noInterrupts();
       pulseCount = 0;
       interrupts();
+
+      if (hxReady && scale.is_ready()) {
+        long acc = 0;
+        for (byte i = 0; i < TARE_READS; ++i) {
+          while (!scale.is_ready()) {}
+          acc += scale.read();
+        }
+        hxOffset = acc / TARE_READS;
+      }
+
       Serial.println(F("reset-ack"));   // confirmation
       digitalWrite(LED_PIN, HIGH);      // short blink
       delay(50);

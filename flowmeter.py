@@ -81,10 +81,14 @@ class FlowServer:
 
             if "," in line:                      # CSV data frame
                 parts = line.split(",")
-                if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-                    ms, pc = parts[0], parts[1]
-                    self.latest_millis = int(ms)
-                    self.latest_pulses = int(pc)
+                try:
+                    ms = int(parts[0])
+                    pc = int(parts[1])
+                except (IndexError, ValueError):
+                    pass
+                else:
+                    self.latest_millis = ms
+                    self.latest_pulses = pc
                     if len(parts) >= 3:
                         try:
                             raw_w = float(parts[2])

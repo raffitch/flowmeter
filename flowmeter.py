@@ -50,6 +50,7 @@ class FlowServer:
         self.latest_pulses = 0
         self.latest_millis = 0
         self.latest_weight = None
+        self.weight_offset = 0.0
         self.clients       = set()
 
         # calibration state
@@ -86,12 +87,13 @@ class FlowServer:
                     self.latest_pulses = int(pc)
                     if len(parts) >= 3:
                         try:
-                            self.latest_weight = float(parts[2])
+                            raw_w = float(parts[2])
+                            self.latest_weight = raw_w - self.weight_offset
                         except ValueError:
                             pass
 
-            elif line == "reset-ack":            # ESP8266 confirmation
-                print("↳ reset acknowledged")
+            elif line in ("reset-ack", "tare-ack"):
+                print("↳ reset acknowledged" if line=="reset-ack" else "↳ tare acknowledged")
                 self.status_queue.append(json.dumps(
                     {"type":"status", "msg":"reset"}))
             elif line == "valve-open":
@@ -207,10 +209,14 @@ class FlowServer:
 
                 # ---- reset counter ----
                 elif cmd == "reset":
-                    self.send('r')                # tell ESP8266
+                    if self.current_sensor == "scale":
+                        self.send('t')            # tare command
+                        self.weight_offset = self.latest_weight or 0.0
+                        self.latest_weight = 0.0
+                    else:
+                        self.send('r')            # reset pulse counter
                     self.latest_pulses = 0
                     self.latest_millis = 0
-                    self.latest_weight = 0.0
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
         finally:
             self.clients.discard(ws)

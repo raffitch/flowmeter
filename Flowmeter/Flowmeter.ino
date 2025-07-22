@@ -64,11 +64,29 @@ void loop() {
   /* -------- handle incoming commands -------- */
   while (Serial.available() > 0) {
     char c = Serial.read();
-    if (c == 'r') {                     // reset counter / tare scale
+    if (c == 'r') {                     // reset counter only
       noInterrupts();
       pulseCount = 0;
       interrupts();
 
+      Serial.println(F("reset-ack"));   // confirmation
+      digitalWrite(LED_PIN, HIGH);      // short blink
+      delay(50);
+      digitalWrite(LED_PIN, LOW);
+      // send an immediate zero frame so the host updates right away
+      Serial.print(millis());
+      Serial.print(',');
+      Serial.print(pulseCount);
+      if (hxReady) {
+        long acc = 0;
+        for (byte i = 0; i < HX_AVG; ++i) acc += scale.read();
+        long raw = acc / HX_AVG;
+        float g = (raw - hxOffset) / COUNTS_PER_GRAM;
+        Serial.print(',');
+        Serial.print(g, 1);
+      }
+      Serial.println();
+    } else if (c == 't') {              // tare HX711
       if (hxReady) {
         long acc = 0;
         for (byte i = 0; i < TARE_READS; ++i) {
@@ -78,11 +96,10 @@ void loop() {
         hxOffset = acc / TARE_READS;
       }
 
-      Serial.println(F("reset-ack"));   // confirmation
+      Serial.println(F("tare-ack"));    // confirmation
       digitalWrite(LED_PIN, HIGH);      // short blink
       delay(50);
       digitalWrite(LED_PIN, LOW);
-      // send an immediate zero frame so the host updates right away
       Serial.print(millis());
       Serial.print(',');
       Serial.print(pulseCount);

@@ -190,18 +190,12 @@ class FlowServer:
 
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
-                    # reset ESP8266 counter so each run begins at zero
-                    self.ser.reset_input_buffer()  # drop stale frames
-                    self.reset_event.clear()
-                    self.send('r')                # request reset
-                    try:
-                        await asyncio.wait_for(self.reset_event.wait(), 2.0)
-                    except asyncio.TimeoutError:
-                        print("⚠ no reset-ack")
-                    self.send('o')                # open valve once reset
-                    self.latest_pulses = 0
+                    # Fast start: open valve immediately and use differential counting
+                    self.ser.reset_input_buffer()
+                    self.pulse_start   = self.latest_pulses
+                    self.send('o')                # open valve now
                     self.cal_running   = True
-                    self.pulse_start   = 0
+                    # retain latest_pulses for delta calculations
                     self.weight_start  = self.latest_weight or 0.0
                     self.current_sensor = data.get("sensor", "flow")
                     self.t0            = time.time()

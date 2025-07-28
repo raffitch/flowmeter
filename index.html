@@ -107,6 +107,7 @@
   updateSensor();
 
   let armed=false, running=false, startPend=false, waitingReset=false;
+  let pendingHardClear=false;
   let lastPulse=0, lastWeight=0, lastMillis=0;
   let t0=0, lastChange=0;
   let filt=null, ema=null;
@@ -179,7 +180,12 @@
         }
         if(d.weight!==lastWeight) lastChange=now;
       }else{
-        const dt= lastMillis? (d.millis-lastMillis)/1000 : 0;
+        const dt = lastMillis ? (d.millis - lastMillis)/1000 : 0;
+        if (d.pulses < lastPulse) {
+          rawBuf.length=0; avgBuf.length=0; ema=null; filt=0;
+          lastPulse=d.pulses; lastMillis=d.millis;
+          return;
+        }
         if(dt>0 && d.pulses!==lastPulse){
           const raw=(d.pulses-lastPulse)/dt;
           rawBuf.push(raw); if(rawBuf.length>MEDIAN_WINDOW) rawBuf.shift();
@@ -211,6 +217,7 @@
       if(d.msg==='reset'){
         resultEl.textContent = sensor==='scale' ? 'Scale tared' : 'Counter reset';
         softReset();
+        if(pendingHardClear){ hardReset(); pendingHardClear=false; }
       }
     }
 
@@ -268,7 +275,11 @@
     startBtn.disabled=false; stopBtn.disabled=true;
   };
   resetBtn.onclick = () => { waitingReset=true; ws.send('reset'); };
-  resetAllBtn.onclick = () => { waitingReset=true; ws.send('reset'); hardReset(); };
+  resetAllBtn.onclick = () => {
+    waitingReset = true;
+    pendingHardClear = true;
+    ws.send('reset');
+  };
   saveCsvBtn.onclick = () => { downloadCsv(); };
   savePngBtn.onclick = () => { Plotly.toImage(chartDiv,{format:'png'}).then(url=>{Object.assign(document.createElement('a'),{href:url,download:'flow_chart.png'}).click();}); };
 

@@ -185,6 +185,7 @@ class FlowServer:
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
                     # reset ESP8266 counter so each run begins at zero
+                    self.ser.reset_input_buffer()  # drop stale frames
                     self.send('r')                # reset
                     self.send('o')                # open valve
                     self.latest_pulses = 0

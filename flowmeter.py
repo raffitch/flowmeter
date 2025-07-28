@@ -97,6 +97,10 @@ class FlowServer:
                             pass
 
             elif line in ("reset-ack", "tare-ack"):
+                # Drop any leftover frames so the next data is from the fresh counter
+                self.ser.reset_input_buffer()
+                self.latest_pulses = 0
+                self.latest_millis = 0
                 if line == "tare-ack":
                     self.weight_offset = 0.0  # ESP now reports zero-based weight
                 print("↳ reset acknowledged" if line=="reset-ack" else "↳ tare acknowledged")
@@ -215,6 +219,8 @@ class FlowServer:
 
                 # ---- reset counter ----
                 elif cmd == "reset":
+                    # clear any queued frames so old data doesn't leak
+                    self.ser.reset_input_buffer()
                     if self.current_sensor == "scale":
                         self.send('t')            # tare command
                         self.weight_offset = self.latest_weight or 0.0

@@ -172,7 +172,8 @@
             avgBuf.push(mid); if(avgBuf.length>MA_WINDOW) avgBuf.shift();
             const m=avgBuf.reduce((a,b)=>a+b,0)/avgBuf.length;
             ema=ema===null?m:EMA_ALPHA*m+(1-EMA_ALPHA)*ema;
-            const rate=ema;
+            let rate = ema || 0;
+            if (rate < 0 || Object.is(rate, -0)) rate = 0;
             const t=(now-t0)/1000;
             addPoint(t, rate);
             avgEl.textContent=rate.toFixed(3);
@@ -183,6 +184,7 @@
         const dt = lastMillis ? (d.millis - lastMillis)/1000 : 0;
         if (d.pulses < lastPulse) {
           rawBuf.length=0; avgBuf.length=0; ema=null; filt=0;
+          avgEl.textContent='0';
           lastPulse=d.pulses; lastMillis=d.millis;
           return;
         }
@@ -193,7 +195,8 @@
           avgBuf.push(mid); if(avgBuf.length>MA_WINDOW) avgBuf.shift();
           const m=avgBuf.reduce((a,b)=>a+b,0)/avgBuf.length;
           ema=ema===null?m:EMA_ALPHA*m+(1-EMA_ALPHA)*ema;
-          filt=ema;
+          filt = ema || 0;
+          if (filt < 0 || Object.is(filt, -0)) filt = 0;
           avgEl.textContent=filt.toFixed(1);
           if(running && current){
             const t=(now-t0)/1000;
@@ -267,6 +270,7 @@
     startBtn.disabled=true;
     stopBtn.disabled=false;
     waitingReset=true;
+    softReset();
     ws.send(JSON.stringify({cmd:'start',volume:VOLUME_L,sensor:sensor,pulses:sensor==='flow'&&targetPEl.value?Number(targetPEl.value):undefined,weight:sensor==='scale'&&targetWEl.value?Number(targetWEl.value):undefined,seconds:targetSEl.value?Number(targetSEl.value):undefined}));
   };
   stopBtn.onclick = () => {
@@ -274,7 +278,11 @@
     running=false; startPend=false; armed=false;
     startBtn.disabled=false; stopBtn.disabled=true;
   };
-  resetBtn.onclick = () => { waitingReset=true; ws.send('reset'); };
+  resetBtn.onclick = () => {
+    waitingReset=true;
+    softReset();
+    ws.send('reset');
+  };
   resetAllBtn.onclick = () => {
     waitingReset = true;
     pendingHardClear = true;

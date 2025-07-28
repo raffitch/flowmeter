@@ -67,6 +67,7 @@ void loop() {
     if (c == 'r') {                     // reset counter only
       noInterrupts();
       pulseCount = 0;
+      lastPulseUs = micros();
       interrupts();
 
       Serial.println(F("reset-ack"));   // confirmation

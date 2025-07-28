@@ -259,6 +259,7 @@
   startBtn.onclick = () => {
     startBtn.disabled=true;
     stopBtn.disabled=false;
+    waitingReset=true;
     ws.send(JSON.stringify({cmd:'start',volume:VOLUME_L,sensor:sensor,pulses:sensor==='flow'&&targetPEl.value?Number(targetPEl.value):undefined,weight:sensor==='scale'&&targetWEl.value?Number(targetWEl.value):undefined,seconds:targetSEl.value?Number(targetSEl.value):undefined}));
   };
   stopBtn.onclick = () => {

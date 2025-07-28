@@ -43,7 +43,9 @@ change for about a second.
 Pressing **Reset** clears the current run. When the scale sensor is selected it
 sends a dedicated `t` command to tare the HX711 so the next readings are
 reported relative to zero. The Python bridge temporarily subtracts the current
-weight to keep the display steady while the ESP8266 performs the tare.
+weight to keep the display steady while the ESP8266 performs the tare.  Starting
+a run now waits for this reset acknowledgement so the first data frame begins at
+zero, avoiding spikes and ensuring the valve opens immediately.
 
 Plotly is used for plotting, providing zoomable curves and hover details. Each
 run is drawn as a separate trace with its pressure and regulator version in the

@@ -52,6 +52,7 @@ class FlowServer:
         self.latest_weight = None
         self.weight_offset = 0.0
         self.clients       = set()
+        self.reset_event   = asyncio.Event()
 
         # calibration state
         self.cal_running   = False
@@ -104,6 +105,7 @@ class FlowServer:
                 if line == "tare-ack":
                     self.weight_offset = 0.0  # ESP now reports zero-based weight
                 print("↳ reset acknowledged" if line=="reset-ack" else "↳ tare acknowledged")
+                self.reset_event.set()
                 self.status_queue.append(json.dumps({"type":"status", "msg":"reset"}))
             elif line == "valve-open":
                 print("🟢 Valve opened")
@@ -190,8 +192,13 @@ class FlowServer:
                 if cmd == "start" and not self.cal_running:
                     # reset ESP8266 counter so each run begins at zero
                     self.ser.reset_input_buffer()  # drop stale frames
-                    self.send('r')                # reset
-                    self.send('o')                # open valve
+                    self.reset_event.clear()
+                    self.send('r')                # request reset
+                    try:
+                        await asyncio.wait_for(self.reset_event.wait(), 2.0)
+                    except asyncio.TimeoutError:
+                        print("⚠ no reset-ack")
+                    self.send('o')                # open valve once reset
                     self.latest_pulses = 0
                     self.cal_running   = True
                     self.pulse_start   = 0

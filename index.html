@@ -109,6 +109,7 @@
   let armed=false, running=false, startPend=false, waitingReset=false;
   let pendingHardClear=false;
   let lastPulse=0, lastWeight=0, lastMillis=0;
+  let startPulse=0;
   let t0=0, lastChange=0;
   let filt=null, ema=null;
   const rawBuf=[], avgBuf=[];
@@ -154,13 +155,14 @@
     const now = performance.now();
 
     if(d.type==='live'){
-      pulsesEl.textContent=d.pulses;
-      if(d.weight!=null) weightEl.textContent=d.weight.toFixed(1);
-
       if(waitingReset){
         lastPulse=d.pulses; lastWeight=d.weight; lastMillis=d.millis;
         return;
       }
+
+      const dispP = d.pulses - startPulse;
+      pulsesEl.textContent = dispP >= 0 ? dispP : 0;
+      if(d.weight!=null) weightEl.textContent=d.weight.toFixed(1);
 
       if(sensor==='scale'){
         if(running && current){
@@ -267,6 +269,7 @@
   }
 
   startBtn.onclick = () => {
+    startPulse = lastPulse;
     startBtn.disabled=true;
     stopBtn.disabled=false;
     waitingReset=true;
@@ -280,12 +283,15 @@
   };
   resetBtn.onclick = () => {
     waitingReset=true;
+    startPulse=0;
     softReset();
     ws.send('reset');
   };
   resetAllBtn.onclick = () => {
     waitingReset = true;
     pendingHardClear = true;
+    startPulse = 0;
+    softReset();
     ws.send('reset');
   };
   saveCsvBtn.onclick = () => { downloadCsv(); };

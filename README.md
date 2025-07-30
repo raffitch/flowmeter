@@ -40,6 +40,10 @@ flow sensor data. Calibration can stop after a specified number of pulses,
 grams or elapsed seconds. Auto‑stop ends a run if the selected sensor doesn't
 change for about a second.
 
+The status line indicates whether the WebSocket or ESP8266 connection drops.
+Starting and stopping a run also play short tones so you can hear when the
+valve opens or closes.
+
 Pressing **Reset** clears the current run. When the scale sensor is selected it
 sends a dedicated `t` command to tare the HX711 so the next readings are
 reported relative to zero. The Python bridge temporarily subtracts the current
@@ -51,6 +55,10 @@ Plotly is used for plotting, providing zoomable curves and hover details. Each
 run is drawn as a separate trace with its pressure and regulator version in the
 legend so multiple runs overlay for easy comparison, and completed runs are
 summarised with the average pulses per second.
+
+CSV exports show all runs side by side: the first column lists the timestamps
+while each additional column contains one run labelled with its pressure in MPa.
+Comment lines report the total pulses for each run.
 
 For consistent results, keep the water source pressure and temperature steady
 and perform multiple runs for each regulator version.

@@ -78,7 +78,12 @@ class FlowServer:
     # ── serial→memory loop ────────────────────────────────────────────────
     async def serial_reader(self):
         while True:
-            line = self.ser.readline().decode(errors="ignore").strip()
+            try:
+                line = self.ser.readline().decode(errors="ignore").strip()
+            except serial.SerialException as e:
+                print(f"⚠ serial error: {e}")
+                self.status_queue.append(json.dumps({"type":"status","msg":"esp-disconnected"}))
+                break
 
             if "," in line:                      # CSV data frame
                 parts = line.split(",")
@@ -118,6 +123,9 @@ class FlowServer:
     async def broadcaster(self):
         while True:
             if self.clients:
+                while self.status_queue:
+                    msg = self.status_queue.pop(0)
+                    await asyncio.gather(*(c.send(msg) for c in self.clients), return_exceptions=True)
                 msg = json.dumps({
                     "type":   "live",
                     "millis": self.latest_millis,
@@ -174,6 +182,8 @@ class FlowServer:
     # ── websocket handler ────────────────────────────────────────────────
     async def ws_handler(self, ws):
         self.clients.add(ws)
+        print("🌐 client connected")
+        self.status_queue.append(json.dumps({"type":"status","msg":"client-connected"}))
 
         # push queued status messages once
         while self.status_queue:
@@ -233,6 +243,8 @@ class FlowServer:
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
         finally:
             self.clients.discard(ws)
+            print("🌐 client disconnected")
+            self.status_queue.append(json.dumps({"type":"status","msg":"client-disconnected"}))
 
 # ── main ──────────────────────────────────────────────────────────────────
 async def main():

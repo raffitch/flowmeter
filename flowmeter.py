@@ -199,6 +199,10 @@ class FlowServer:
     async def finish_calibration(self):
         """Stop calibration, close valve and broadcast result."""
         self.send('c')
+        self.set_pressure(0)  # ramp command back to 0 MPa
+        self.ser.write(b'p 0\n')
+        self.ser.flush()
+        print("→ ESP8266: p 0")
         self.cal_running = False
         elapsed = time.time() - self.t0
         start_p = self.pressure_start or 0.0

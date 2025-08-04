@@ -38,15 +38,22 @@ bool hxReady = false;
 inline uint8_t dacCode(float p){ return (uint8_t)constrain(round(p / PFS * 255.0f),0,255); }
 
 void setup() {
+  // claim PWM pin before any serial output so it stays quiet
+  pinMode(PWM_PIN, OUTPUT);
+  digitalWrite(PWM_PIN, LOW);
+
+  Serial.begin(BAUD);
+  Serial.setDebugOutput(false);
+
   pinMode(FLOW_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(FLOW_PIN), countPulse, RISING);
 
   pinMode(VALVE_SIG_PIN, OUTPUT);
   digitalWrite(VALVE_SIG_PIN, LOW);   // valve normally closed
-  pinMode(PWM_PIN, OUTPUT);
-  analogWrite(PWM_PIN, 0);            // start with 0 V
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+
+  analogWrite(PWM_PIN, 0);            // start with 0 V
 
   // ── initialise HX711 scale -------------------------------------------
   scale.begin(HX_PIN_DOUT, HX_PIN_SCK);
@@ -66,7 +73,6 @@ void setup() {
     Serial.println(F("hx711-not-ready"));
   }
 
-  Serial.begin(BAUD);
   Serial.println(F("ready"));           // banner for host script
 }
 

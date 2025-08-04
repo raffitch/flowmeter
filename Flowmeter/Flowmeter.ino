@@ -18,6 +18,8 @@ const unsigned long INTERVAL_MS = 150;  // how often to send a CSV frame
 const float    PFS     = 0.9f;           // ITV-313L full-scale (MPa)
 const uint8_t  PWM_PIN = D5;             // GP8101S control (0-10 V)
 volatile int   setpoint_mbar = 0;
+int pressZero = 0;                       // ADC baseline at 0 MPa
+float pressScale = PFS / 1023.0f;        // MPa per ADC count after offset
 
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastPulseUs = 0;      // for debouncing
@@ -77,6 +79,15 @@ void setup() {
     Serial.println(F("hx711-not-ready"));
   }
 
+  // measure pressure sensor baseline so 0 MPa reads near zero
+  long accP = 0;
+  for (byte i = 0; i < 16; ++i) {
+    accP += analogRead(PRESS_SENSE_PIN);
+    delay(5);
+  }
+  pressZero = accP / 16;
+  pressScale = PFS / 1023.0f;  // slope assuming full-scale at 1023 counts
+
   Serial.println(F("ready"));           // banner for host script
 }
 
@@ -114,7 +125,8 @@ void loop() {
         Serial.print(g, 1);
       }
       int adc = analogRead(PRESS_SENSE_PIN);
-      float mp = adc / 1023.0 * PFS;
+      float mp = (adc - pressZero) * pressScale;
+      if (mp < 0) mp = 0;
       Serial.print(',');
       Serial.print(mp, 3);
       Serial.print(',');
@@ -147,7 +159,8 @@ void loop() {
         Serial.print(g, 1);
       }
       int adc = analogRead(PRESS_SENSE_PIN);
-      float mp = adc / 1023.0 * PFS;
+      float mp = (adc - pressZero) * pressScale;
+      if (mp < 0) mp = 0;
       Serial.print(',');
       Serial.print(mp, 3);
       Serial.print(',');
@@ -191,7 +204,8 @@ void loop() {
     }
 
     int adc = analogRead(PRESS_SENSE_PIN);
-    float mp = adc / 1023.0 * PFS;
+    float mp = (adc - pressZero) * pressScale;
+    if (mp < 0) mp = 0;
 
     Serial.print(now);
     Serial.print(',');

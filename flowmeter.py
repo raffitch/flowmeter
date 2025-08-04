@@ -314,6 +314,12 @@ class FlowServer:
                     self.latest_millis = 0
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
 
+                # ---- manual pressure set ----
+                elif cmd == "set":
+                    mp = data.get("mpa")
+                    if isinstance(mp, (int, float)):
+                        self.set_pressure(float(mp))
+
         finally:
             self.clients.discard(ws)
             print("🌐 client disconnected")

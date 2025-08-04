@@ -35,7 +35,9 @@ pip install -r requirements.txt
    ramps the pressure from the start value to the end value over the course of
    the run, stopping when the selected pulse or time limit is reached. At the
    end of each run it commands 0 MPa so the DAC returns to 0 V. The calibration
-   volume is fixed at 1 L.
+   volume is fixed at 1 L. A **Mode** dropdown also offers a *Manual* option
+   with a slider that directly sets the pressure without starting a timed
+   experiment, useful for quick bench tests.
 
 The plotted curve can be saved to CSV or PNG. Each CSV contains run metadata
 (start/end time, volume, regulator version, programmed start/end pressure) plus

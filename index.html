@@ -27,6 +27,20 @@
   </select>
 </div>
 
+<div>
+  Mode <select id="mode">
+    <option value="run">Timed run</option>
+    <option value="manual">Manual</option>
+  </select>
+</div>
+
+<div id="manualBox" style="display:none;margin-top:.5rem">
+  <label>Manual pressure (MPa)
+    <input id="manualSlider" type="range" min="0" max="0.9" step="0.01" value="0">
+    <span id="manualVal">0.00</span>
+  </label>
+</div>
+
 <div id="pulsesBox">
   <div>Pulses counted</div>
   <div id="pulses" class="big">0</div>
@@ -48,11 +62,11 @@
 <div>Regulator version <input id="reg" type="text" style="width:6em"></div>
 <div>Start pressure (MPa) <input id="pressStart" type="number" step="0.01" min="0" max="0.9" style="width:6em"></div>
 <div>End pressure (MPa) <input id="pressEnd" type="number" step="0.01" min="0" max="0.9" style="width:6em"></div>
-<div>Voltage range <span id="voltStart">0.00</span>→<span id="voltEnd">0.00</span> V</div>
+<div id="voltRange">Voltage range <span id="voltStart">0.00</span>→<span id="voltEnd">0.00</span> V</div>
 <div id="limitPulse">Stop after pulses <input id="targetP" type="number" min="1" step="1" style="width:6em"></div>
 <div id="limitWeight" style="display:none">Stop at weight (g) <input id="targetW" type="number" min="1" step="1" style="width:6em"></div>
 <div>Stop after seconds <input id="targetS" type="number" min="1" step="1" style="width:6em"></div>
-<div><label><input id="autoStop" type="checkbox" checked> auto-stop when value stops changing</label></div>
+<div id="autoBox"><label><input id="autoStop" type="checkbox" checked> auto-stop when value stops changing</label></div>
 
 <button id="start" disabled>Start</button>
 <button id="stop" disabled>Stop</button>
@@ -90,7 +104,9 @@
         pulsesBox=$('pulsesBox'), weightBox=$('weightBox'), avgBox=$('avgBox'),
         limitPulse=$('limitPulse'), limitWeight=$('limitWeight'),
         autoStopEl=$('autoStop'), chartDiv=$('chart'), logEl=$('log'),
-        resultEl=$('result'), avgLabel=avgBox.firstElementChild;
+        resultEl=$('result'), avgLabel=avgBox.firstElementChild,
+        modeEl=$('mode'), manualBox=$('manualBox'), manualSlider=$('manualSlider'), manualVal=$('manualVal'),
+        voltRange=$('voltRange'), autoBox=$('autoBox');
 
   let sensor = 'flow';
   const PRESS_TRACE_IDX = 0;
@@ -101,13 +117,35 @@
     pulsesBox.style.display  = isFlow ? '' : 'none';
     avgBox.style.display     = '';
     avgLabel.textContent     = isFlow ? 'Average pulses / s' : 'Average L/s';
-    limitPulse.style.display = isFlow ? '' : 'none';
     weightBox.style.display  = isFlow ? 'none' : '';
-    limitWeight.style.display= isFlow ? 'none' : '';
+    if(modeEl.value==='run'){
+      limitPulse.style.display = isFlow ? '' : 'none';
+      limitWeight.style.display= isFlow ? 'none' : '';
+    }
     resetBtn.textContent     = isFlow ? 'Reset pulses' : 'Tare scale';
     Plotly.relayout(chartDiv, {yaxis:{title:isFlow?'pulses / s':'L / s', rangemode:'tozero'}});
   }
   sensorEl.onchange = updateSensor;
+
+  function updateMode(){
+    const manual = modeEl.value === 'manual';
+    manualBox.style.display = manual ? '' : 'none';
+    const isFlow = sensor === 'flow';
+    regEl.parentElement.style.display      = manual ? 'none' : '';
+    pressStartEl.parentElement.style.display = manual ? 'none' : '';
+    pressEndEl.parentElement.style.display   = manual ? 'none' : '';
+    voltRange.style.display                = manual ? 'none' : '';
+    limitPulse.style.display               = (!manual && isFlow) ? '' : 'none';
+    limitWeight.style.display              = (!manual && !isFlow) ? '' : 'none';
+    targetSEl.parentElement.style.display  = manual ? 'none' : '';
+    autoBox.style.display                  = manual ? 'none' : '';
+    startBtn.style.display = manual ? 'none' : '';
+    stopBtn.style.display  = manual ? 'none' : '';
+    resetAllBtn.style.display = manual ? 'none' : '';
+    saveCsvBtn.style.display  = manual ? 'none' : '';
+    savePngBtn.style.display  = manual ? 'none' : '';
+  }
+  modeEl.onchange = updateMode;
 
   Plotly.newPlot(chartDiv, [
     {x:[],y:[],mode:'lines',name:'Measured MPa',yaxis:'y2',line:{color:'black'}},
@@ -120,6 +158,7 @@
   }, {responsive:true, displaylogo:false, scrollZoom:true});
 
   updateSensor();
+  updateMode();
   function updateVolt(){
     const ps=parseFloat(pressStartEl.value);
     const pe=parseFloat(pressEndEl.value);
@@ -393,6 +432,15 @@
   };
   saveCsvBtn.onclick = () => { downloadCsv(); };
   savePngBtn.onclick = () => { Plotly.toImage(chartDiv,{format:'png'}).then(url=>{Object.assign(document.createElement('a'),{href:url,download:'flow_chart.png'}).click();}); };
+
+  let to=null;
+  manualSlider.addEventListener('input', e=>{
+    manualVal.textContent=(+manualSlider.value).toFixed(2);
+    clearTimeout(to);
+    to=setTimeout(()=>{
+      ws.send(JSON.stringify({cmd:'set',mpa:+manualSlider.value}));
+    },50);
+  });
 
   function downloadCsv(){
     if(!runs.length){ alert('No data yet'); return; }

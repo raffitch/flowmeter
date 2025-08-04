@@ -92,7 +92,7 @@
 <button id="saveCsv" disabled class="px-4 py-2 text-base bg-blue-500 text-white rounded hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Save CSV</button>
 <button id="savePng" disabled class="px-4 py-2 text-base bg-blue-500 text-white rounded hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Save PNG</button>
 
-<div id="chart" class="mx-auto w-[700px] h-[300px] mt-4 border border-gray-300"></div>
+<div id="chart" class="mx-auto w-full max-w-[700px] mt-4 border border-gray-300"></div>
 
 <label class="block mt-2"><input id="interp" type="checkbox" class="mr-2"> Interpolate</label>
 
@@ -129,6 +129,13 @@
         voltRange=$('voltRange'), autoBox=$('autoBox'),
         voltCurEl=$('voltCur'), mpaCmdEl=$('mpaCmd'), mpaActEl=$('mpaAct'),
         interpEl=$('interp');
+
+  function resizeChart(){
+    chartDiv.style.height = Math.round(window.innerHeight * 0.4) + 'px';
+    if(chartDiv.data) Plotly.Plots.resize(chartDiv);
+  }
+  window.addEventListener('resize', resizeChart);
+  resizeChart();
 
   let sensor = 'flow';
   const PRESS_TRACE_IDX = 0;
@@ -179,14 +186,15 @@
     margin:{l:40,r:10,b:40,t:10}
   }, {responsive:true, displaylogo:false, scrollZoom:true});
 
+  resizeChart();
+
   updateSensor();
   updateMode();
   interpEl.onchange = () => {
     const shape = interpEl.checked ? 'spline' : 'linear';
-    const idxs = chartDiv.data.map((_,i)=>i);
-    Plotly.restyle(chartDiv,{"line.shape":shape},idxs);
-    chartDiv.data.forEach(t=>{t.line.shape=shape;});
-    runs.forEach(r=>{ if(r.trace.line) r.trace.line.shape=shape; });
+    const idxs = Array.from({length: chartDiv.data.length}, (_, i) => i);
+    Plotly.restyle(chartDiv, { 'line.shape': shape }, idxs);
+    runs.forEach(r => { if (r.trace.line) r.trace.line.shape = shape; });
   };
   function updateVolt(){
     const ps=parseFloat(pressStartEl.value);

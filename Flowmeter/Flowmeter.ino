@@ -35,7 +35,9 @@ constexpr byte  HX_AVG = 8;                    // averaging reads
 long hxOffset = 0;
 bool hxReady = false;
 
-inline uint8_t dacCode(float p){ return (uint8_t)constrain(round(p / PFS * 255.0f),0,255); }
+inline uint16_t dacCode(float p){
+  return (uint16_t)constrain(round(p / 0.9f * 1023.0f), 0, 1023);
+}
 
 void setup() {
   // claim PWM pin before any serial output so it stays quiet
@@ -53,6 +55,8 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+  analogWriteFreq(20000);             // 20 kHz PWM
+  analogWriteRange(1023);             // use full 10-bit range
   analogWrite(PWM_PIN, 0);            // start with 0 V
 
   // ── initialise HX711 scale -------------------------------------------
@@ -80,7 +84,8 @@ void loop() {
   static float pCmd = 0;                              // filtered set-point (MPa)
   float pTarget = 0.001f * setpoint_mbar;             // mbar → MPa
   pCmd += 0.05f * (pTarget - pCmd);                   // τ ≈100 ms in a 1 kHz loop
-  analogWrite(PWM_PIN, dacCode(pCmd));
+  uint16_t duty = dacCode(pCmd);
+  analogWrite(PWM_PIN, duty);
 
   /* -------- handle incoming commands -------- */
   while (Serial.available() > 0) {

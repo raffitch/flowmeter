@@ -51,6 +51,7 @@ class FlowServer:
         self.latest_millis = 0
         self.latest_weight = None
         self.latest_pressure = None
+        self.latest_pcmd     = None
         self.weight_offset = 0.0
         self.clients       = set()
         self.reset_event   = asyncio.Event()
@@ -113,12 +114,7 @@ class FlowServer:
                 else:
                     self.latest_millis = ms
                     self.latest_pulses = pc
-                    if len(parts) == 3:
-                        try:
-                            self.latest_pressure = float(parts[2])
-                        except ValueError:
-                            pass
-                    elif len(parts) >= 4:
+                    if len(parts) >= 5:
                         try:
                             self.latest_weight = float(parts[2]) - self.weight_offset
                         except ValueError:
@@ -127,6 +123,25 @@ class FlowServer:
                             self.latest_pressure = float(parts[3])
                         except ValueError:
                             pass
+                        try:
+                            self.latest_pcmd = float(parts[4])
+                        except ValueError:
+                            pass
+                    elif len(parts) == 4:
+                        try:
+                            self.latest_pressure = float(parts[2])
+                        except ValueError:
+                            pass
+                        try:
+                            self.latest_pcmd = float(parts[3])
+                        except ValueError:
+                            pass
+                    elif len(parts) == 3:
+                        try:
+                            self.latest_pressure = float(parts[2])
+                        except ValueError:
+                            pass
+                        self.latest_pcmd = None
 
             elif line in ("reset-ack", "tare-ack"):
                 # Drop any leftover frames so the next data is from the fresh counter
@@ -134,6 +149,7 @@ class FlowServer:
                 self.latest_pulses = 0
                 self.latest_millis = 0
                 self.latest_pressure = None
+                self.latest_pcmd = None
                 if line == "tare-ack":
                     self.weight_offset = 0.0  # ESP now reports zero-based weight
                 print("↳ reset acknowledged" if line=="reset-ack" else "↳ tare acknowledged")
@@ -158,7 +174,8 @@ class FlowServer:
                     "millis": self.latest_millis,
                     "pulses": self.latest_pulses,
                     "weight": self.latest_weight,
-                    "pressure": self.latest_pressure
+                    "pressure": self.latest_pressure,
+                    "pCmd": self.latest_pcmd
                 })
                 await asyncio.gather(
                     *(c.send(msg) for c in self.clients),
@@ -302,6 +319,10 @@ class FlowServer:
                     self.latest_pulses = 0
                     self.latest_millis = 0
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
+
+                elif cmd == "set":
+                    mbar = int(float(data.get("mpa", 0)) * 1000)
+                    self.ser.write(f"s {mbar}\n".encode())
         finally:
             self.clients.discard(ws)
             print("🌐 client disconnected")

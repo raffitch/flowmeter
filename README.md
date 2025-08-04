@@ -23,15 +23,17 @@ pip install -r requirements.txt
    feedback should connect to **A0**. It prints a CSV frame roughly every
    150 ms. Pulses are debounced in hardware and, if a HX711 scale is connected,
    weight is streamed alongside the pulse count. Pressure (in MPa) is reported
-   on every frame.
+   on every frame along with the commanded set‑point.
 2. Run `python3 flowmeter.py` and select the correct serial port.
 3. Open `index.html` in a browser.
 4. Enter the regulator version along with starting and ending pressures (MPa)
    and an optional ramp time. The page shows the corresponding 0–10 V drive
-   levels. Choose whether to use the flow sensor or scale, then press **Start**
-   to capture a run. The bridge linearly ramps the pressure from the start value
-   to the end value over the specified time. The calibration volume is fixed at
-   1 L.
+   levels. A slider lets you tweak the pressure interactively; the browser
+   sends the set‑point in real time and plots both the measured (solid) and
+   commanded (dotted) pressures. Choose whether to use the flow sensor or
+   scale, then press **Start** to capture a run. The bridge linearly ramps the
+   pressure from the start value to the end value over the specified time. The
+   calibration volume is fixed at 1 L.
 
 The plotted curve can be saved to CSV or PNG. Each CSV contains run metadata
 (start/end time, volume, regulator version, programmed start/end pressure) plus

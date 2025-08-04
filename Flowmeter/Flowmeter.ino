@@ -8,14 +8,16 @@
 
 const byte  FLOW_PIN       = D2;         // flow sensor signal
 const byte  VALVE_SIG_PIN  = D8;         // relay signal pin
-const byte  PRESS_SIG_PIN  = D5;         // GP8101S control (0-10 V)
 const byte  PRESS_SENSE_PIN= A0;         // analog pressure feedback
 const byte  LED_PIN        = LED_BUILTIN; // on-board LED for feedback
 const unsigned long BAUD  = 115200;
 // Data frame interval. 150 ms keeps the host responsive while still
 // smoothing a little on the ESP8266 side.
 const unsigned long INTERVAL_MS = 150;  // how often to send a CSV frame
-const float MAX_PRESSURE_MP = 0.9;      // regulator max pressure
+
+const float    PFS     = 0.9f;           // ITV-313L full-scale (MPa)
+const uint8_t  PWM_PIN = D5;             // GP8101S control (0-10 V)
+volatile int   setpoint_mbar = 0;
 
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastPulseUs = 0;      // for debouncing
@@ -23,6 +25,7 @@ const unsigned long MIN_PULSE_US = 1000;     // ignore pulses <1 ms apart
 
 // ── HX711 scale support ─────────────────────────────────────────────
 #include <HX711.h>
+#include <math.h>
 constexpr byte HX_PIN_DOUT = D6;  // DT on NodeMCU v2
 constexpr byte HX_PIN_SCK  = D7;  // SCK on NodeMCU v2
 HX711 scale;
@@ -32,14 +35,16 @@ constexpr byte  HX_AVG = 8;                    // averaging reads
 long hxOffset = 0;
 bool hxReady = false;
 
+inline uint8_t dacCode(float p){ return (uint8_t)constrain(round(p / PFS * 255.0f),0,255); }
+
 void setup() {
   pinMode(FLOW_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(FLOW_PIN), countPulse, RISING);
 
   pinMode(VALVE_SIG_PIN, OUTPUT);
   digitalWrite(VALVE_SIG_PIN, LOW);   // valve normally closed
-  pinMode(PRESS_SIG_PIN, OUTPUT);
-  analogWrite(PRESS_SIG_PIN, 0);      // start with 0 V
+  pinMode(PWM_PIN, OUTPUT);
+  analogWrite(PWM_PIN, 0);            // start with 0 V
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
@@ -66,6 +71,11 @@ void setup() {
 }
 
 void loop() {
+  static float pCmd = 0;                              // filtered set-point (MPa)
+  float pTarget = 0.001f * setpoint_mbar;             // mbar → MPa
+  pCmd += 0.05f * (pTarget - pCmd);                   // τ ≈100 ms in a 1 kHz loop
+  analogWrite(PWM_PIN, dacCode(pCmd));
+
   /* -------- handle incoming commands -------- */
   while (Serial.available() > 0) {
     char c = Serial.read();
@@ -93,9 +103,11 @@ void loop() {
         Serial.print(g, 1);
       }
       int adc = analogRead(PRESS_SENSE_PIN);
-      float mp = adc / 1023.0 * MAX_PRESSURE_MP;
+      float mp = adc / 1023.0 * PFS;
       Serial.print(',');
       Serial.print(mp, 3);
+      Serial.print(',');
+      Serial.print(pCmd, 3);
       Serial.println();
     } else if (c == 't') {              // tare HX711
       if (hxReady) {
@@ -124,9 +136,11 @@ void loop() {
         Serial.print(g, 1);
       }
       int adc = analogRead(PRESS_SENSE_PIN);
-      float mp = adc / 1023.0 * MAX_PRESSURE_MP;
+      float mp = adc / 1023.0 * PFS;
       Serial.print(',');
       Serial.print(mp, 3);
+      Serial.print(',');
+      Serial.print(pCmd, 3);
       Serial.println();
     } else if (c == 'o') {              // open valve
       digitalWrite(VALVE_SIG_PIN, HIGH);
@@ -140,9 +154,11 @@ void loop() {
       if (kpa < 0) kpa = 0;
       if (kpa > 900) kpa = 900;
       int pwm = map(kpa, 0, 900, 0, 1023);
-      analogWrite(PRESS_SIG_PIN, pwm);
+      analogWrite(PWM_PIN, pwm);
       Serial.print(F("pressure-set,"));
       Serial.println(kpa);
+    } else if (c == 's') {              // 's 473' means 0.473 MPa
+      setpoint_mbar = Serial.parseInt();
     }
   }
 
@@ -164,7 +180,7 @@ void loop() {
     }
 
     int adc = analogRead(PRESS_SENSE_PIN);
-    float mp = adc / 1023.0 * MAX_PRESSURE_MP;
+    float mp = adc / 1023.0 * PFS;
 
     Serial.print(now);
     Serial.print(',');
@@ -175,6 +191,8 @@ void loop() {
     }
     Serial.print(',');
     Serial.print(mp, 3);
+    Serial.print(',');
+    Serial.print(pCmd, 3);
     Serial.println();
 
     lastPrint = now;

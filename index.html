@@ -62,6 +62,11 @@
 <button id="saveCsv" disabled>Save CSV</button>
 <button id="savePng" disabled>Save PNG</button>
 
+<label>Pressure MPa 
+  <input id="pSlider" type="range" min="0" max="0.9" step="0.01" value="0">
+  <span id="pVal">0.00</span>
+</label>
+
 <div id="chart"></div>
 
 <div id="result"></div>
@@ -91,9 +96,13 @@
         pulsesBox=$('pulsesBox'), weightBox=$('weightBox'), avgBox=$('avgBox'),
         limitPulse=$('limitPulse'), limitWeight=$('limitWeight'),
         autoStopEl=$('autoStop'), chartDiv=$('chart'), logEl=$('log'),
-        resultEl=$('result'), avgLabel=avgBox.firstElementChild;
+        resultEl=$('result'), avgLabel=avgBox.firstElementChild,
+        slider=$('pSlider'), pVal=$('pVal');
 
   let sensor = 'flow';
+  const PRESS_TRACE_IDX = 0;
+  const TARGET_TRACE_IDX = 1;
+  let to = null;
   function updateSensor() {
     sensor = sensorEl.value;
     const isFlow = sensor === 'flow';
@@ -108,9 +117,13 @@
   }
   sensorEl.onchange = updateSensor;
 
-  Plotly.newPlot(chartDiv, [], {
+  Plotly.newPlot(chartDiv, [
+    {x:[],y:[],mode:'lines',name:'Measured MPa',yaxis:'y2',line:{color:'black'}},
+    {x:[],y:[],mode:'lines',name:'Target MPa',yaxis:'y2',line:{color:'black',dash:'dot'}}
+  ], {
     xaxis:{title:'time (s)', range:[0,90]},
     yaxis:{title:'pulses / s', rangemode:'tozero'},
+    yaxis2:{title:'MPa', overlaying:'y', side:'right', range:[0,0.9]},
     margin:{l:40,r:10,b:40,t:10}
   }, {responsive:true, displaylogo:false, scrollZoom:true});
 
@@ -153,7 +166,10 @@
   function hardReset(){
     softReset();
     runs.length=0;
-    Plotly.react(chartDiv, [], {xaxis:{title:'time (s)',range:[0,90]},yaxis:{title:'pulses / s',rangemode:'tozero'},margin:{l:40,r:10,b:40,t:10}}, {responsive:true, displaylogo:false, scrollZoom:true});
+    Plotly.react(chartDiv, [
+      {x:[],y:[],mode:'lines',name:'Measured MPa',yaxis:'y2',line:{color:'black'}},
+      {x:[],y:[],mode:'lines',name:'Target MPa',yaxis:'y2',line:{color:'black',dash:'dot'}}
+    ], {xaxis:{title:'time (s)',range:[0,90]},yaxis:{title:'pulses / s',rangemode:'tozero'},yaxis2:{title:'MPa',overlaying:'y',side:'right',range:[0,0.9]},margin:{l:40,r:10,b:40,t:10}}, {responsive:true, displaylogo:false, scrollZoom:true});
     logEl.innerHTML='';
     xMax=0;
   }
@@ -173,6 +189,14 @@
     startBtn.disabled=true; stopBtn.disabled=true; resetBtn.disabled=true;
     resetAllBtn.disabled=true; saveCsvBtn.disabled=true; savePngBtn.disabled=true;
   };
+
+  slider.addEventListener('input', e=>{
+    pVal.textContent = (+slider.value).toFixed(2);
+    clearTimeout(to);
+    to = setTimeout(()=>{
+      ws.send(JSON.stringify({cmd:'set',mpa:+slider.value}));
+    },50);
+  });
 
   ws.onmessage = ev => {
     const d = JSON.parse(ev.data);
@@ -231,6 +255,12 @@
           }
         }
         if(d.pulses!==lastPulse) lastChange=now;
+      }
+
+      if(running){
+        const t=(now-t0)/1000;
+        if(d.pressure!=null) Plotly.extendTraces(chartDiv,{x:[[t]],y:[[d.pressure]]},[PRESS_TRACE_IDX]);
+        if(d.pCmd!=null) Plotly.extendTraces(chartDiv,{x:[[t]],y:[[d.pCmd]]},[TARGET_TRACE_IDX]);
       }
 
       if(autoStopEl.checked && running && now-lastChange>800){
@@ -328,13 +358,13 @@
     runs.splice(idx,1);
     if(r.li) r.li.remove();
     runs.forEach((run,i)=>{
-      run.idx=i;
+      run.idx=i+2;
       const name=`Run ${i+1}: ${run.regulator||'n/a'} — ${(run.startPressure||0).toFixed(3)}→${(run.endPressure||0).toFixed(3)} MPa`;
       run.trace.name=name;
       run.trace.hovertemplate=run.sensor==='scale'
         ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`
         : `${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`;
-      Plotly.restyle(chartDiv,{name:run.trace.name,hovertemplate:run.trace.hovertemplate},[i]);
+      Plotly.restyle(chartDiv,{name:run.trace.name,hovertemplate:run.trace.hovertemplate},[i+2]);
     });
   }
 

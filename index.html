@@ -280,6 +280,11 @@
             if (rate < 0 || Object.is(rate, -0)) rate = 0;
             const t=(now-t0)/1000;
             addPoint(t, rate);
+            if(current){
+              current.cmd.push(lastCmd);
+              current.act.push(lastPress);
+              current.volt.push((lastCmd/0.9*10));
+            }
             avgEl.textContent=rate.toFixed(3);
           }
         }
@@ -305,6 +310,9 @@
           if(running && current){
             const t=(now-t0)/1000;
             addPoint(t,filt);
+            current.cmd.push(lastCmd);
+            current.act.push(lastPress);
+            current.volt.push((lastCmd/0.9*10));
           }
         }
         if(d.pulses!==lastPulse) lastChange=now;
@@ -385,7 +393,7 @@
     const name=`Run ${runs.length+1}: ${regEl.value||'n/a'} — ${pressStartEl.value||'n/a'}→${pressEndEl.value||'n/a'} MPa`;
     const trace={x:[],y:[],mode:'lines',line:{color:`hsl(${hue},70%,40%)`},name:name,hovertemplate:sensor==='scale'?`${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`:`${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`};
     Plotly.addTraces(chartDiv, trace);
-    current={idx:chartDiv.data.length-1, trace:trace, sensor:sensor, volume:VOLUME_L, regulator:regEl.value, startPressure:pressStartEl.value?Number(pressStartEl.value):0, endPressure:pressEndEl.value?Number(pressEndEl.value):0, startVoltage:voltStartEl.textContent, endVoltage:voltEndEl.textContent, start:new Date(), end:null};
+    current={idx:chartDiv.data.length-1, trace:trace, sensor:sensor, volume:VOLUME_L, regulator:regEl.value, startPressure:pressStartEl.value?Number(pressStartEl.value):0, endPressure:pressEndEl.value?Number(pressEndEl.value):0, startVoltage:voltStartEl.textContent, endVoltage:voltEndEl.textContent, start:new Date(), end:null, cmd:[], act:[], volt:[]};
     runs.push(current);
   }
   function addLog(r){
@@ -474,13 +482,20 @@
     if(!runs.length){ alert('No data yet'); return; }
     const times=Array.from(new Set(runs.flatMap(r=>r.trace.x))).sort((a,b)=>a-b);
     let header='time_s';
-    runs.forEach((r,i)=>{ header+=`,run ${i+1} - ${r.startPressure||'n/a'}→${r.endPressure||'n/a'}MPa`; });
+    runs.forEach((r,i)=>{ header+=`,run ${i+1} pps,run ${i+1} target_mpa,run ${i+1} actual_mpa,run ${i+1} voltage_v`; });
     const rows=[header];
     times.forEach(t=>{
       const row=[t];
       runs.forEach(r=>{
         const idx=r.trace.x.indexOf(t);
-        row.push(idx>-1?r.trace.y[idx]:'');
+        if(idx>-1){
+          row.push(r.trace.y[idx]);
+          row.push(r.cmd[idx]??'');
+          row.push(r.act[idx]??'');
+          row.push(r.volt[idx]??'');
+        }else{
+          row.push('','','','');
+        }
       });
       rows.push(row.join(','));
     });

@@ -17,9 +17,8 @@ const unsigned long INTERVAL_MS = 150;  // how often to send a CSV frame
 
 const float    PFS     = 0.9f;           // ITV-313L full-scale (MPa)
 const uint8_t  PWM_PIN = D5;             // GP8101S control (0-10 V)
+const uint16_t PWM_MAX = 1023;
 volatile int   setpoint_mbar = 0;
-int pressZero = 0;                       // ADC baseline at 0 MPa
-float pressScale = PFS / 1023.0f;        // MPa per ADC count after offset
 
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastPulseUs = 0;      // for debouncing
@@ -37,8 +36,13 @@ constexpr byte  HX_AVG = 8;                    // averaging reads
 long hxOffset = 0;
 bool hxReady = false;
 
-inline uint16_t dacCode(float p){
-  return (uint16_t)constrain(round(p / 0.9f * 1023.0f), 0, 1023);
+float readPressureMPa(){
+  int adc = analogRead(PRESS_SENSE_PIN);
+  float vCore = adc / 1023.0f;       // 0–1 V
+  float vMon = vCore * 5.4f;
+  float pMPa = (vMon - 1.0f) / 4.0f * 0.9f;
+  if (pMPa < 0) pMPa = 0;
+  return pMPa;
 }
 
 void setup() {
@@ -58,7 +62,7 @@ void setup() {
   digitalWrite(LED_PIN, LOW);
 
   analogWriteFreq(20000);             // 20 kHz PWM
-  analogWriteRange(1023);             // use full 10-bit range
+  analogWriteRange(PWM_MAX);          // use full 10-bit range
   analogWrite(PWM_PIN, 0);            // start with 0 V
 
   // ── initialise HX711 scale -------------------------------------------
@@ -79,15 +83,6 @@ void setup() {
     Serial.println(F("hx711-not-ready"));
   }
 
-  // measure pressure sensor baseline so 0 MPa reads near zero
-  long accP = 0;
-  for (byte i = 0; i < 16; ++i) {
-    accP += analogRead(PRESS_SENSE_PIN);
-    delay(5);
-  }
-  pressZero = accP / 16;
-  pressScale = PFS / 1023.0f;  // slope assuming full-scale at 1023 counts
-
   Serial.println(F("ready"));           // banner for host script
 }
 
@@ -95,8 +90,8 @@ void loop() {
   static float pCmd = 0;                              // filtered set-point (MPa)
   float pTarget = 0.001f * setpoint_mbar;             // mbar → MPa
   pCmd += 0.05f * (pTarget - pCmd);                   // τ ≈100 ms in a 1 kHz loop
-  uint16_t duty = dacCode(pCmd);
-  analogWrite(PWM_PIN, duty);
+  uint16_t duty = (uint16_t)round(pCmd / 0.9f * PWM_MAX);
+  analogWrite(D5, duty);
 
   /* -------- handle incoming commands -------- */
   while (Serial.available() > 0) {
@@ -124,9 +119,7 @@ void loop() {
         Serial.print(',');
         Serial.print(g, 1);
       }
-      int adc = analogRead(PRESS_SENSE_PIN);
-      float mp = (adc - pressZero) * pressScale;
-      if (mp < 0) mp = 0;
+      float mp = readPressureMPa();
       Serial.print(',');
       Serial.print(mp, 3);
       Serial.print(',');
@@ -158,9 +151,7 @@ void loop() {
         Serial.print(',');
         Serial.print(g, 1);
       }
-      int adc = analogRead(PRESS_SENSE_PIN);
-      float mp = (adc - pressZero) * pressScale;
-      if (mp < 0) mp = 0;
+      float mp = readPressureMPa();
       Serial.print(',');
       Serial.print(mp, 3);
       Serial.print(',');
@@ -177,8 +168,9 @@ void loop() {
       int kpa = Serial.parseInt();
       if (kpa < 0) kpa = 0;
       if (kpa > 900) kpa = 900;
-      int pwm = map(kpa, 0, 900, 0, 1023);
-      analogWrite(PWM_PIN, pwm);
+      float pMPa = kpa / 1000.0f;
+      uint16_t duty = (uint16_t)round(pMPa / 0.9f * PWM_MAX);
+      analogWrite(D5, duty);
       Serial.print(F("pressure-set,"));
       Serial.println(kpa);
     } else if (c == 's') {              // 's 473' means 0.473 MPa
@@ -203,9 +195,7 @@ void loop() {
       g = (raw - hxOffset) / COUNTS_PER_GRAM;
     }
 
-    int adc = analogRead(PRESS_SENSE_PIN);
-    float mp = (adc - pressZero) * pressScale;
-    if (mp < 0) mp = 0;
+    float mp = readPressureMPa();
 
     Serial.print(now);
     Serial.print(',');

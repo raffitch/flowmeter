@@ -49,7 +49,6 @@
 <div>Start pressure (MPa) <input id="pressStart" type="number" step="0.01" min="0" max="0.9" style="width:6em"></div>
 <div>End pressure (MPa) <input id="pressEnd" type="number" step="0.01" min="0" max="0.9" style="width:6em"></div>
 <div>Voltage range <span id="voltStart">0.00</span>→<span id="voltEnd">0.00</span> V</div>
-<div>Ramp time (s) <input id="pTime" type="number" step="0.1" min="0" style="width:6em"></div>
 <div id="limitPulse">Stop after pulses <input id="targetP" type="number" min="1" step="1" style="width:6em"></div>
 <div id="limitWeight" style="display:none">Stop at weight (g) <input id="targetW" type="number" min="1" step="1" style="width:6em"></div>
 <div>Stop after seconds <input id="targetS" type="number" min="1" step="1" style="width:6em"></div>
@@ -89,7 +88,7 @@
   const statusEl=$('status'), sensorEl=$('sensor'),
         pulsesEl=$('pulses'), weightEl=$('weight'), elapsedEl=$('elapsed'),
         avgEl=$('avg'), regEl=$('reg'), pressStartEl=$('pressStart'), pressEndEl=$('pressEnd'),
-        pTimeEl=$('pTime'), voltStartEl=$('voltStart'), voltEndEl=$('voltEnd'),
+        voltStartEl=$('voltStart'), voltEndEl=$('voltEnd'),
         targetPEl=$('targetP'), targetWEl=$('targetW'), targetSEl=$('targetS'),
         startBtn=$('start'), stopBtn=$('stop'), resetBtn=$('reset'), resetAllBtn=$('resetAll'),
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
@@ -135,6 +134,7 @@
     voltEndEl.textContent=!isNaN(pe)?(pe/0.9*10).toFixed(2):'0.00';
   }
   pressStartEl.oninput=pressEndEl.oninput=updateVolt;
+  pressStartEl.onchange=pressEndEl.onchange=updateVolt;
   updateVolt();
 
   let armed=false, running=false, startPend=false, waitingReset=false;
@@ -381,7 +381,6 @@
       sensor:sensor,
       pStart:pressStartEl.value?Number(pressStartEl.value):undefined,
       pEnd:pressEndEl.value?Number(pressEndEl.value):undefined,
-      pTime:pTimeEl.value?Number(pTimeEl.value):undefined,
       pulses:sensor==='flow'&&targetPEl.value?Number(targetPEl.value):undefined,
       weight:sensor==='scale'&&targetWEl.value?Number(targetWEl.value):undefined,
       seconds:targetSEl.value?Number(targetSEl.value):undefined

@@ -68,7 +68,6 @@ class FlowServer:
         self.target_seconds = None
         self.pressure_start = None
         self.pressure_end   = None
-        self.ramp_task      = None
 
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
 
@@ -86,13 +85,6 @@ class FlowServer:
         self.ser.write(cmd)
         self.ser.flush()
         print(f"→ ESP8266: p{kpa}")
-
-    async def ramp_pressure(self, start: float, end: float, duration: float):
-        steps = max(1, int(duration / 0.1))
-        for i in range(1, steps + 1):
-            mp = start + (end - start) * i / steps
-            self.set_pressure(mp)
-            await asyncio.sleep(duration / steps)
 
     # ── serial→memory loop ────────────────────────────────────────────────
     async def serial_reader(self):
@@ -183,6 +175,16 @@ class FlowServer:
                 )
 
             if self.cal_running:
+                if self.pressure_start is not None and self.pressure_end is not None:
+                    progresses = []
+                    if self.target_seconds is not None:
+                        progresses.append((time.time() - self.t0) / self.target_seconds)
+                    if self.target_pulses is not None:
+                        progresses.append((self.latest_pulses - self.pulse_start) / self.target_pulses)
+                    if progresses:
+                        prog = max(0.0, min(1.0, min(progresses)))
+                        mp = self.pressure_start + (self.pressure_end - self.pressure_start) * prog
+                        self.set_pressure(mp)
                 if self.current_sensor == "scale" and self.target_weight is not None:
                     if (self.latest_weight or 0) - self.weight_start >= self.target_weight:
                         await self.finish_calibration()
@@ -198,9 +200,6 @@ class FlowServer:
         """Stop calibration, close valve and broadcast result."""
         self.send('c')
         self.cal_running = False
-        if self.ramp_task:
-            self.ramp_task.cancel()
-            self.ramp_task = None
         elapsed = time.time() - self.t0
         start_p = self.pressure_start or 0.0
         end_p   = self.pressure_end if self.pressure_end is not None else (self.latest_pressure or 0.0)
@@ -260,7 +259,6 @@ class FlowServer:
                     self.ser.reset_input_buffer()
                     p_start = data.get("pStart")
                     p_end   = data.get("pEnd")
-                    p_time  = data.get("pTime")
                     if isinstance(p_start, (int, float)):
                         self.pressure_start = float(p_start)
                         self.set_pressure(self.pressure_start)
@@ -270,11 +268,6 @@ class FlowServer:
                         self.pressure_end = float(p_end)
                     else:
                         self.pressure_end = self.pressure_start
-                    if (self.pressure_start is not None and self.pressure_end is not None and
-                            isinstance(p_time, (int, float)) and p_time > 0):
-                        self.ramp_task = asyncio.create_task(
-                            self.ramp_pressure(self.pressure_start, self.pressure_end, float(p_time))
-                        )
                     self.pulse_start    = self.latest_pulses
                     self.send('o')                # open valve now
                     self.cal_running    = True
@@ -305,9 +298,6 @@ class FlowServer:
                 elif cmd == "reset":
                     # clear any queued frames so old data doesn't leak
                     self.ser.reset_input_buffer()
-                    if self.ramp_task:
-                        self.ramp_task.cancel()
-                        self.ramp_task = None
                     self.pressure_start = None
                     self.pressure_end = None
                     if self.current_sensor == "scale":

@@ -56,6 +56,9 @@ run is drawn as a separate trace with its pressure and regulator version in the
 legend so multiple runs overlay for easy comparison, and completed runs are
 summarised with the average pulses per second.
 
+Each log entry includes a **Delete** button so unwanted runs can be removed from
+the plot and excluded from CSV exports before saving.
+
 CSV exports show all runs side by side: the first column lists the timestamps
 while each additional column contains one run labelled with its pressure in MPa.
 Comment lines report the total pulses for each run.

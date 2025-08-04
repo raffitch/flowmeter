@@ -288,9 +288,33 @@
   function addLog(r){
     const li=document.createElement('li');
     const dur=(r.elapsed||0).toFixed(1);
-    if(r.sensor==='scale'){ li.textContent=`${r.start.toLocaleString()} — ${dur}s, ${(r.rate/1000||0).toFixed(3)} L/s (${r.delta.toFixed(1)} g)`; }
-    else { li.textContent=`${r.start.toLocaleString()} — ${dur}s, ${(r.pps||0).toFixed(1)} pps (${r.delta} pulses)`; }
+    const txt=r.sensor==='scale'
+      ? `${r.start.toLocaleString()} — ${dur}s, ${(r.rate/1000||0).toFixed(3)} L/s (${r.delta.toFixed(1)} g)`
+      : `${r.start.toLocaleString()} — ${dur}s, ${(r.pps||0).toFixed(1)} pps (${r.delta} pulses)`;
+    li.append(txt,' ');
+    const del=document.createElement('button');
+    del.textContent='Delete';
+    del.onclick=()=>removeRun(r);
+    li.appendChild(del);
     logEl.appendChild(li);
+    r.li=li;
+  }
+
+  function removeRun(r){
+    const idx=runs.indexOf(r);
+    if(idx===-1) return;
+    Plotly.deleteTraces(chartDiv,[r.idx]);
+    runs.splice(idx,1);
+    if(r.li) r.li.remove();
+    runs.forEach((run,i)=>{
+      run.idx=i;
+      const name=`Run ${i+1}: ${run.regulator||'n/a'} — ${run.pressure||'n/a'} MPa`;
+      run.trace.name=name;
+      run.trace.hovertemplate=run.sensor==='scale'
+        ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`
+        : `${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`;
+      Plotly.restyle(chartDiv,{name:run.trace.name,hovertemplate:run.trace.hovertemplate},[i]);
+    });
   }
 
   startBtn.onclick = () => {

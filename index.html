@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Flow-Sensor Calibration</title>
+<title>Flow Mapper</title>
 <style>
   body   {font-family:sans-serif;max-width:520px;margin:2rem auto}
   h1     {font-size:1.4rem;margin-bottom:.6rem}
@@ -16,7 +16,7 @@
 <script src="https://cdn.plot.ly/plotly-2.31.0.min.js"></script>
 </head>
 <body>
-<h1>Flow-sensor calibration</h1>
+<h1>Flow Mapper</h1>
 
 <div id="status">Connecting…</div>
 
@@ -61,11 +61,6 @@
 <button id="saveCsv" disabled>Save CSV</button>
 <button id="savePng" disabled>Save PNG</button>
 
-<label>Pressure MPa 
-  <input id="pSlider" type="range" min="0" max="0.9" step="0.01" value="0">
-  <span id="pVal">0.00</span>
-</label>
-
 <div id="chart"></div>
 
 <div id="result"></div>
@@ -95,13 +90,11 @@
         pulsesBox=$('pulsesBox'), weightBox=$('weightBox'), avgBox=$('avgBox'),
         limitPulse=$('limitPulse'), limitWeight=$('limitWeight'),
         autoStopEl=$('autoStop'), chartDiv=$('chart'), logEl=$('log'),
-        resultEl=$('result'), avgLabel=avgBox.firstElementChild,
-        slider=$('pSlider'), pVal=$('pVal');
+        resultEl=$('result'), avgLabel=avgBox.firstElementChild;
 
   let sensor = 'flow';
   const PRESS_TRACE_IDX = 0;
   const TARGET_TRACE_IDX = 1;
-  let to = null;
   function updateSensor() {
     sensor = sensorEl.value;
     const isFlow = sensor === 'flow';
@@ -190,13 +183,6 @@
     resetAllBtn.disabled=true; saveCsvBtn.disabled=true; savePngBtn.disabled=true;
   };
 
-  slider.addEventListener('input', e=>{
-    pVal.textContent = (+slider.value).toFixed(2);
-    clearTimeout(to);
-    to = setTimeout(()=>{
-      ws.send(JSON.stringify({cmd:'set',mpa:+slider.value}));
-    },50);
-  });
 
   ws.onmessage = ev => {
     const d = JSON.parse(ev.data);

@@ -25,15 +25,13 @@ pip install -r requirements.txt
    weight is streamed alongside the pulse count. Pressure (in MPa) is reported
    on every frame along with the commanded set‑point.
 2. Run `python3 flowmeter.py` and select the correct serial port.
-3. Open `index.html` in a browser.
+3. Open `index.html` (Flow Mapper) in a browser.
 4. Enter the regulator version along with starting and ending pressures (MPa).
-   The page shows the corresponding 0–10 V drive levels. A slider lets you
-   tweak the pressure interactively; the browser sends the set‑point in real
-   time and plots both the measured (solid) and commanded (dotted) pressures.
-   Choose whether to use the flow sensor or scale, then press **Start** to
-   capture a run. The bridge ramps the pressure from the start value to the end
-   value over the course of the run, stopping when the selected pulse or time
-   limit is reached. The calibration volume is fixed at 1 L.
+   The page shows the corresponding 0–10 V drive levels. Choose whether to use
+   the flow sensor or scale, then press **Start** to capture a run. The bridge
+   ramps the pressure from the start value to the end value over the course of
+   the run, stopping when the selected pulse or time limit is reached. The
+   calibration volume is fixed at 1 L.
 
 The plotted curve can be saved to CSV or PNG. Each CSV contains run metadata
 (start/end time, volume, regulator version, programmed start/end pressure) plus

@@ -80,11 +80,11 @@ class FlowServer:
         print(f"→ ESP8266: {cmd}")
 
     def set_pressure(self, mp: float) -> None:
-        kpa = max(0, min(900, int(float(mp) * 1000)))
-        cmd = f"p{kpa}\n".encode()
+        mbar = max(0, min(900, int(float(mp) * 1000)))
+        cmd = f"s {mbar}\n".encode()
         self.ser.write(cmd)
         self.ser.flush()
-        print(f"→ ESP8266: p{kpa}")
+        print(f"→ ESP8266: s {mbar}")
 
     # ── serial→memory loop ────────────────────────────────────────────────
     async def serial_reader(self):
@@ -310,9 +310,6 @@ class FlowServer:
                     self.latest_millis = 0
                     await ws.send(json.dumps({"type":"ack","status":"reset-sent"}))
 
-                elif cmd == "set":
-                    mbar = int(float(data.get("mpa", 0)) * 1000)
-                    self.ser.write(f"s {mbar}\n".encode())
         finally:
             self.clients.discard(ws)
             print("🌐 client disconnected")

@@ -50,6 +50,10 @@ flow sensor data. Calibration can stop after a specified number of pulses,
 grams or elapsed seconds. Auto‑stop ends a run if the selected sensor doesn't
 change for about a second.
 
+Live status panels list the current drive voltage, the commanded pressure and
+the measured MPa beside the pulse count, elapsed time and average pulses per
+second.
+
 The status line indicates whether the WebSocket or ESP8266 connection drops.
 Starting and stopping a run also play short tones so you can hear when the
 valve opens or closes.

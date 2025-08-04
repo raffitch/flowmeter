@@ -38,8 +38,7 @@ bool hxReady = false;
 
 float readPressureMPa(){
   int adc = analogRead(PRESS_SENSE_PIN);
-  float vCore = adc / 1023.0f;       // 0–1 V
-  float vMon = vCore * 5.4f;
+  float vMon = adc * 3.3f / 1023.0f;  // actual monitor voltage
   float pMPa = (vMon - 1.0f) / 4.0f * 0.9f;
   if (pMPa < 0) pMPa = 0;
   return pMPa;

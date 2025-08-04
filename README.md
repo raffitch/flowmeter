@@ -20,9 +20,9 @@ pip install -r requirements.txt
 1. Upload `Flowmeter/Flowmeter.ino` to an ESP8266 board. The sketch expects the
    flow sensor on pin **D2**, the valve control on **D8**, the ITV2050 driver on
    **D5** (0–10 V via a GP8101S) and the HX711 on **D6/D7**. An analog pressure
-   feedback should connect to **A0**. At start‑up the sketch samples the idle
-   voltage from this 220 Ω divider and subtracts it so 0 MPa reads near zero.
-   The PWM pin on D5 is claimed and driven
+   feedback should connect to **A0** through a divider that brings the
+   0–10 V monitor voltage into the ESP8266's 0–3.3 V range. The PWM pin on D5 is
+   claimed and driven
    low before any serial output and `Serial.setDebugOutput(false)` keeps it
    quiet; when compiling, select **Debug Port: Disabled** and **Debug Level: None**
    (or define `-DNDEBUG`) to prevent the SDK from writing to the UART. The sketch

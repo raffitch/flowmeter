@@ -66,6 +66,8 @@ class FlowServer:
         self.target_weight = None
         self.target_seconds = None
         self.pressure_start = None
+        self.pressure_end   = None
+        self.ramp_task      = None
 
         self.status_queue = [json.dumps({"type":"status", "msg":"serial-open"})]
 
@@ -76,6 +78,20 @@ class FlowServer:
         self.ser.flush()
 
         print(f"→ ESP8266: {cmd}")
+
+    def set_pressure(self, mp: float) -> None:
+        kpa = max(0, min(900, int(float(mp) * 1000)))
+        cmd = f"p{kpa}\n".encode()
+        self.ser.write(cmd)
+        self.ser.flush()
+        print(f"→ ESP8266: p{kpa}")
+
+    async def ramp_pressure(self, start: float, end: float, duration: float):
+        steps = max(1, int(duration / 0.1))
+        for i in range(1, steps + 1):
+            mp = start + (end - start) * i / steps
+            self.set_pressure(mp)
+            await asyncio.sleep(duration / steps)
 
     # ── serial→memory loop ────────────────────────────────────────────────
     async def serial_reader(self):
@@ -165,9 +181,12 @@ class FlowServer:
         """Stop calibration, close valve and broadcast result."""
         self.send('c')
         self.cal_running = False
+        if self.ramp_task:
+            self.ramp_task.cancel()
+            self.ramp_task = None
         elapsed = time.time() - self.t0
         start_p = self.pressure_start or 0.0
-        end_p   = self.latest_pressure or 0.0
+        end_p   = self.pressure_end if self.pressure_end is not None else (self.latest_pressure or 0.0)
         if self.current_sensor == "scale":
             delta = (self.latest_weight or 0) - self.weight_start
             rate = delta / elapsed if elapsed > 0 else 0
@@ -196,6 +215,8 @@ class FlowServer:
         self.target_pulses = None
         self.target_weight = None
         self.target_seconds = None
+        self.pressure_start = None
+        self.pressure_end   = None
 
     # ── websocket handler ────────────────────────────────────────────────
     async def ws_handler(self, ws):
@@ -218,17 +239,26 @@ class FlowServer:
 
                 # ---- start calibration ----
                 if cmd == "start" and not self.cal_running:
-                    # Fast start: set pressure, open valve immediately and use differential counting
+                    # Fast start: open valve immediately and use differential counting
                     self.ser.reset_input_buffer()
-                    pressure_val = data.get("pressure")
-                    if isinstance(pressure_val, (int, float)):
-                        kpa = max(0, min(900, int(float(pressure_val) * 1000)))
-                        cmd = f"p{kpa}\n".encode()
-                        self.ser.write(cmd)
-                        self.ser.flush()
-                        print(f"→ ESP8266: p{kpa}")
+                    p_start = data.get("pStart")
+                    p_end   = data.get("pEnd")
+                    p_time  = data.get("pTime")
+                    if isinstance(p_start, (int, float)):
+                        self.pressure_start = float(p_start)
+                        self.set_pressure(self.pressure_start)
+                    else:
+                        self.pressure_start = None
+                    if isinstance(p_end, (int, float)):
+                        self.pressure_end = float(p_end)
+                    else:
+                        self.pressure_end = self.pressure_start
+                    if (self.pressure_start is not None and self.pressure_end is not None and
+                            isinstance(p_time, (int, float)) and p_time > 0):
+                        self.ramp_task = asyncio.create_task(
+                            self.ramp_pressure(self.pressure_start, self.pressure_end, float(p_time))
+                        )
                     self.pulse_start    = self.latest_pulses
-                    self.pressure_start = self.latest_pressure
                     self.send('o')                # open valve now
                     self.cal_running    = True
                     # retain latest_pulses for delta calculations
@@ -258,6 +288,11 @@ class FlowServer:
                 elif cmd == "reset":
                     # clear any queued frames so old data doesn't leak
                     self.ser.reset_input_buffer()
+                    if self.ramp_task:
+                        self.ramp_task.cancel()
+                        self.ramp_task = None
+                    self.pressure_start = None
+                    self.pressure_end = None
                     if self.current_sensor == "scale":
                         self.send('t')            # tare command
                         self.weight_offset = self.latest_weight or 0.0

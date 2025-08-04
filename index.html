@@ -46,8 +46,10 @@
 </div>
 
 <div>Regulator version <input id="reg" type="text" style="width:6em"></div>
-<div>Pressure setpoint (MPa) <input id="press" type="number" step="0.01" min="0" max="0.9" style="width:6em"></div>
-<div>Voltage <span id="volt">0.00</span> V</div>
+<div>Start pressure (MPa) <input id="pressStart" type="number" step="0.01" min="0" max="0.9" style="width:6em"></div>
+<div>End pressure (MPa) <input id="pressEnd" type="number" step="0.01" min="0" max="0.9" style="width:6em"></div>
+<div>Voltage range <span id="voltStart">0.00</span>→<span id="voltEnd">0.00</span> V</div>
+<div>Ramp time (s) <input id="pTime" type="number" step="0.1" min="0" style="width:6em"></div>
 <div id="limitPulse">Stop after pulses <input id="targetP" type="number" min="1" step="1" style="width:6em"></div>
 <div id="limitWeight" style="display:none">Stop at weight (g) <input id="targetW" type="number" min="1" step="1" style="width:6em"></div>
 <div>Stop after seconds <input id="targetS" type="number" min="1" step="1" style="width:6em"></div>
@@ -81,7 +83,8 @@
   const $ = id => document.getElementById(id);
   const statusEl=$('status'), sensorEl=$('sensor'),
         pulsesEl=$('pulses'), weightEl=$('weight'), elapsedEl=$('elapsed'),
-        avgEl=$('avg'), regEl=$('reg'), pressEl=$('press'), voltEl=$('volt'),
+        avgEl=$('avg'), regEl=$('reg'), pressStartEl=$('pressStart'), pressEndEl=$('pressEnd'),
+        pTimeEl=$('pTime'), voltStartEl=$('voltStart'), voltEndEl=$('voltEnd'),
         targetPEl=$('targetP'), targetWEl=$('targetW'), targetSEl=$('targetS'),
         startBtn=$('start'), stopBtn=$('stop'), resetBtn=$('reset'), resetAllBtn=$('resetAll'),
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
@@ -113,10 +116,12 @@
 
   updateSensor();
   function updateVolt(){
-    const p=parseFloat(pressEl.value);
-    voltEl.textContent=!isNaN(p)?(p/0.9*10).toFixed(2):'0.00';
+    const ps=parseFloat(pressStartEl.value);
+    const pe=parseFloat(pressEndEl.value);
+    voltStartEl.textContent=!isNaN(ps)?(ps/0.9*10).toFixed(2):'0.00';
+    voltEndEl.textContent=!isNaN(pe)?(pe/0.9*10).toFixed(2):'0.00';
   }
-  pressEl.oninput=updateVolt;
+  pressStartEl.oninput=pressEndEl.oninput=updateVolt;
   updateVolt();
 
   let armed=false, running=false, startPend=false, waitingReset=false;
@@ -265,7 +270,12 @@
       startPend=false;
       t0=now; lastChange=now;
       newRun();
-      if(current) { current.startPressure=lastPress; current.voltage=voltEl.textContent; }
+      if(current) {
+        current.startPressure = pressStartEl.value?Number(pressStartEl.value):0;
+        current.endPressure   = pressEndEl.value?Number(pressEndEl.value):current.startPressure;
+        current.startVoltage  = voltStartEl.textContent;
+        current.endVoltage    = voltEndEl.textContent;
+      }
       startBtn.disabled=true;
       stopBtn.disabled=false;
     }
@@ -289,10 +299,10 @@
   }
   function newRun(){
     const hue=(runs.length*60)%360;
-    const name=`Run ${runs.length+1}: ${regEl.value||'n/a'} — ${pressEl.value||'n/a'} MPa`;
+    const name=`Run ${runs.length+1}: ${regEl.value||'n/a'} — ${pressStartEl.value||'n/a'}→${pressEndEl.value||'n/a'} MPa`;
     const trace={x:[],y:[],mode:'lines',line:{color:`hsl(${hue},70%,40%)`},name:name,hovertemplate:sensor==='scale'?`${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`:`${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`};
     Plotly.addTraces(chartDiv, trace);
-    current={idx:chartDiv.data.length-1, trace:trace, sensor:sensor, volume:VOLUME_L, regulator:regEl.value, pressure:pressEl.value, start:new Date(), end:null};
+    current={idx:chartDiv.data.length-1, trace:trace, sensor:sensor, volume:VOLUME_L, regulator:regEl.value, startPressure:pressStartEl.value?Number(pressStartEl.value):0, endPressure:pressEndEl.value?Number(pressEndEl.value):0, startVoltage:voltStartEl.textContent, endVoltage:voltEndEl.textContent, start:new Date(), end:null};
     runs.push(current);
   }
   function addLog(r){
@@ -319,7 +329,7 @@
     if(r.li) r.li.remove();
     runs.forEach((run,i)=>{
       run.idx=i;
-      const name=`Run ${i+1}: ${run.regulator||'n/a'} — ${run.pressure||'n/a'} MPa`;
+      const name=`Run ${i+1}: ${run.regulator||'n/a'} — ${(run.startPressure||0).toFixed(3)}→${(run.endPressure||0).toFixed(3)} MPa`;
       run.trace.name=name;
       run.trace.hovertemplate=run.sensor==='scale'
         ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`
@@ -335,7 +345,17 @@
     waitingReset=true;
     softReset();
     beep(800,200);
-    ws.send(JSON.stringify({cmd:'start',volume:VOLUME_L,sensor:sensor,pressure:pressEl.value?Number(pressEl.value):undefined,pulses:sensor==='flow'&&targetPEl.value?Number(targetPEl.value):undefined,weight:sensor==='scale'&&targetWEl.value?Number(targetWEl.value):undefined,seconds:targetSEl.value?Number(targetSEl.value):undefined}));
+    ws.send(JSON.stringify({
+      cmd:'start',
+      volume:VOLUME_L,
+      sensor:sensor,
+      pStart:pressStartEl.value?Number(pressStartEl.value):undefined,
+      pEnd:pressEndEl.value?Number(pressEndEl.value):undefined,
+      pTime:pTimeEl.value?Number(pTimeEl.value):undefined,
+      pulses:sensor==='flow'&&targetPEl.value?Number(targetPEl.value):undefined,
+      weight:sensor==='scale'&&targetWEl.value?Number(targetWEl.value):undefined,
+      seconds:targetSEl.value?Number(targetSEl.value):undefined
+    }));
   };
   stopBtn.onclick = () => {
     ws.send('stop');
@@ -363,7 +383,7 @@
     if(!runs.length){ alert('No data yet'); return; }
     const times=Array.from(new Set(runs.flatMap(r=>r.trace.x))).sort((a,b)=>a-b);
     let header='time_s';
-    runs.forEach((r,i)=>{ header+=`,run ${i+1} - ${r.pressure||'n/a'}MPa`; });
+    runs.forEach((r,i)=>{ header+=`,run ${i+1} - ${r.startPressure||'n/a'}→${r.endPressure||'n/a'}MPa`; });
     const rows=[header];
     times.forEach(t=>{
       const row=[t];
@@ -374,7 +394,7 @@
       rows.push(row.join(','));
     });
     let meta='';
-    runs.forEach((r,i)=>{ meta+=`# run${i+1}_pulses=${r.delta}\n# run${i+1}_start_pressure=${(r.startPressure||0).toFixed(3)}\n# run${i+1}_end_pressure=${(r.endPressure||0).toFixed(3)}\n# run${i+1}_voltage=${r.voltage||0}\n`; });
+    runs.forEach((r,i)=>{ meta+=`# run${i+1}_pulses=${r.delta}\n# run${i+1}_start_pressure=${(r.startPressure||0).toFixed(3)}\n# run${i+1}_end_pressure=${(r.endPressure||0).toFixed(3)}\n# run${i+1}_start_voltage=${r.startVoltage||0}\n# run${i+1}_end_voltage=${r.endVoltage||0}\n`; });
     const csv=meta+rows.join('\n');
     const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
     Object.assign(document.createElement('a'),{href:url,download:'flow_curves.csv'}).click();

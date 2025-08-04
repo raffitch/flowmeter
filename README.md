@@ -67,10 +67,13 @@ weight to keep the display steady while the ESP8266 performs the tare. Starting
 a run opens the valve immediately and measures the difference from the current
 counters so there is no delay.
 
-Plotly is used for plotting, providing zoomable curves and hover details. Each
-run is drawn as a separate trace with its pressure and regulator version in the
-legend so multiple runs overlay for easy comparison, and completed runs are
-summarised with the average pulses per second.
+The page uses Tailwind CSS for layout and Plotly for plotting, providing
+zoomable curves and hover details. Each run is drawn as a separate trace with
+its pressure and regulator version in the legend so multiple runs overlay for
+easy comparison, and completed runs are summarised with the average pulses per
+second. A checkbox beneath the chart can toggle spline interpolation so the
+trace connects points smoothly, or fall back to linear joins for direct
+mapping.
 
 Each log entry includes a **Delete** button so unwanted runs can be removed from
 the plot and excluded from CSV exports before saving.

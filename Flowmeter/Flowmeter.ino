@@ -19,9 +19,9 @@ const unsigned long BAUD  = 115200;
 // smoothing a little on the ESP8266 side.
 const unsigned long INTERVAL_MS = 150;  // how often to send a CSV frame
 
-const float    PFS_OUT     = 0.75f * 0.980f;           // ITV-313L full-scale (MPa)
-const int ADC_ZERO = 198;
-const float ADC_MPA_PER_COUNT = 0.45f / (580.0f - 198.0f); // 0.00118
+const float    PFS_OUT     = 0.75f * 0.980f * 0.996f * 0.957f;           // ITV-313L full-scale (MPa)
+const int ADC_ZERO = 202;
+const float ADC_MPA_PER_COUNT = 0.001176f;
 const uint8_t  PWM_PIN = D5;             // GP8101S control (0-10 V)
 const uint8_t PWM_MAX = 255;
 volatile int   setpoint_mbar = 0;

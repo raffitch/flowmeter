@@ -77,12 +77,14 @@
   <div class="grid grid-cols-2 gap-4 place-items-center text-center max-w-md w-full mx-auto px-4" id="params">
   <div>Regulator version <input id="reg" type="text" class="border rounded px-2 w-24"></div>
   <div id="voltRange">Voltage range <span id="voltStart">0.00</span>→<span id="voltEnd">0.00</span> V</div>
-  <div>End pressure (MPa) <input id="pressEnd" type="number" step="0.01" min="0" max="0.9" class="border rounded px-2 w-24"></div>
   <div>Start pressure (MPa) <input id="pressStart" type="number" step="0.01" min="0" max="0.9" class="border rounded px-2 w-24"></div>
+  <div>End pressure (MPa) <input id="pressEnd" type="number" step="0.01" min="0" max="0.9" class="border rounded px-2 w-24"></div>
   <div id="limitPulse">Stop after pulses <input id="targetP" type="number" min="1" step="1" class="border rounded px-2 w-24"></div>
   <div id="limitWeight" class="hidden">Stop at weight (g) <input id="targetW" type="number" min="1" step="1" class="border rounded px-2 w-24"></div>
   <div>Stop after seconds <input id="targetS" type="number" min="1" step="1" class="border rounded px-2 w-24"></div>
+  <div></div>
   <div id="autoBox"><label class="inline-flex items-center"><input id="autoStop" type="checkbox" class="mr-2" checked> auto-stop when value stops changing</label></div>
+  <label class="inline-flex items-center"><input id="interp" type="checkbox" class="mr-2"> Interpolate</label>
 </div>
 
 <button id="start" disabled class="px-4 py-2 text-base bg-blue-500 text-white rounded hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
@@ -93,8 +95,6 @@
 <button id="savePng" disabled class="px-4 py-2 text-base bg-blue-500 text-white rounded hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed">Save PNG</button>
 
 <div id="chart" class="mx-auto w-11/12 max-w-[700px] mt-4 border border-gray-300 p-4"></div>
-
-<label class="block mt-2"><input id="interp" type="checkbox" class="mr-2"> Interpolate</label>
 
 <div id="result" class="mt-4 text-green-700"></div>
 <ul id="log" class="mt-4 space-y-1"></ul>

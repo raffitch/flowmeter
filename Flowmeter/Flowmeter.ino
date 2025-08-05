@@ -5,7 +5,9 @@
  *   Red     → 5 V
  *   Black   → GND
  */
-
+// ── ADC-to-pressure calibration (NodeMCU + 220 kΩ series) ──
+const float DIV_RATIO = 1.90f;   // // 0.99 V / 0.52 V ≈ 1.90  
+const float V_ZERO    = 0.99f;   // ITV monitor voltage at 0 MPa
 const byte  FLOW_PIN       = D2;         // flow sensor signal
 const byte  VALVE_SIG_PIN  = D8;         // relay signal pin
 const byte  PRESS_SENSE_PIN= A0;         // analog pressure feedback
@@ -15,9 +17,11 @@ const unsigned long BAUD  = 115200;
 // smoothing a little on the ESP8266 side.
 const unsigned long INTERVAL_MS = 150;  // how often to send a CSV frame
 
-const float    PFS     = 0.9f;           // ITV-313L full-scale (MPa)
+const float    PFS_OUT     = 0.75f * 0.980f;           // ITV-313L full-scale (MPa)
+const int ADC_ZERO = 198;
+const float ADC_MPA_PER_COUNT = 0.45f / (580.0f - 198.0f); // 0.00118
 const uint8_t  PWM_PIN = D5;             // GP8101S control (0-10 V)
-const uint16_t PWM_MAX = 1023;
+const uint8_t PWM_MAX = 255;
 volatile int   setpoint_mbar = 0;
 
 volatile unsigned long pulseCount = 0;
@@ -35,20 +39,23 @@ constexpr byte  TARE_READS = 20;
 constexpr byte  HX_AVG = 8;                    // averaging reads
 long hxOffset = 0;
 bool hxReady = false;
+bool   needZero = true;      // we still have to capture baseline
+unsigned long zeroTimeout = 0; 
 
-float readPressureMPa(){
-  int adc = analogRead(PRESS_SENSE_PIN);
-  float vMon = adc * 3.3f / 1023.0f;  // actual monitor voltage
-  float pMPa = (vMon - 1.0f) / 4.0f * 0.9f;
-  if (pMPa < 0) pMPa = 0;
-  return pMPa;
+
+float readPressureMPa() {
+    int counts = analogRead(PRESS_SENSE_PIN) - ADC_ZERO;
+    if (counts < 0) counts = 0;
+    return counts * ADC_MPA_PER_COUNT;
 }
+
+
 
 void setup() {
   // claim PWM pin before any serial output so it stays quiet
   pinMode(PWM_PIN, OUTPUT);
   digitalWrite(PWM_PIN, LOW);
-
+  zeroTimeout = millis() + 600;
   Serial.begin(BAUD);
   Serial.setDebugOutput(false);
 
@@ -89,8 +96,8 @@ void loop() {
   static float pCmd = 0;                              // filtered set-point (MPa)
   float pTarget = 0.001f * setpoint_mbar;             // mbar → MPa
   pCmd += 0.05f * (pTarget - pCmd);                   // τ ≈100 ms in a 1 kHz loop
-  uint16_t duty = (uint16_t)round(pCmd / 0.9f * PWM_MAX);
-  analogWrite(D5, duty);
+  uint8_t duty = (uint8_t)constrain(round(pCmd / PFS_OUT * PWM_MAX), 0, PWM_MAX);
+  analogWrite(PWM_PIN, duty);
 
   /* -------- handle incoming commands -------- */
   while (Serial.available() > 0) {
@@ -123,6 +130,7 @@ void loop() {
       Serial.print(mp, 3);
       Serial.print(',');
       Serial.print(pCmd, 3);
+
       Serial.println();
     } else if (c == 't') {              // tare HX711
       if (hxReady) {
@@ -168,8 +176,8 @@ void loop() {
       if (kpa < 0) kpa = 0;
       if (kpa > 900) kpa = 900;
       float pMPa = kpa / 1000.0f;
-      uint16_t duty = (uint16_t)round(pMPa / 0.9f * PWM_MAX);
-      analogWrite(D5, duty);
+      uint8_t duty  = (uint8_t)constrain(round(pMPa / PFS_OUT * PWM_MAX), 0, PWM_MAX);
+      analogWrite(PWM_PIN, duty);
       Serial.print(F("pressure-set,"));
       Serial.println(kpa);
     } else if (c == 's') {              // 's 473' means 0.473 MPa

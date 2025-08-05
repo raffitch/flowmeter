@@ -397,9 +397,11 @@
   };
 
   function addPoint(t,y){
-    current.trace.x.push(t); current.trace.y.push(y);
+    current.trace.x.push(t);
+    current.trace.y.push(y);
+    if(current.trace.customdata) current.trace.customdata.push(lastPress);
     if(t>xMax){ xMax=t; Plotly.relayout(chartDiv,{"xaxis.range":[0,Math.max(30,xMax)]}); }
-    Plotly.extendTraces(chartDiv,{x:[[t]],y:[[y]]},[current.idx]);
+    Plotly.extendTraces(chartDiv,{x:[[t]],y:[[y]],customdata:[[lastPress]]},[current.idx]);
   }
   function newRun(){
     const hue=(runs.length*60)%360;
@@ -407,12 +409,13 @@
     const trace={
       x:[],
       y:[],
+      customdata:[],
       mode:'lines',
       line:{color:`hsl(${hue},70%,40%)`, shape: interpEl.checked ? 'spline' : 'linear'},
       name:name,
       hovertemplate: sensor==='scale'
-        ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`
-        : `${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`
+        ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<br>%{customdata:.3f} MPa<extra></extra>`
+        : `${name}<br>%{y:.1f} pps at %{x:.1f}s<br>%{customdata:.3f} MPa<extra></extra>`
     };
     Plotly.addTraces(chartDiv, trace);
     current={idx:chartDiv.data.length-1, trace:trace, sensor:sensor, volume:VOLUME_L, regulator:regEl.value, startPressure:pressStartEl.value?Number(pressStartEl.value):0, endPressure:pressEndEl.value?Number(pressEndEl.value):0, startVoltage:voltStartEl.textContent, endVoltage:voltEndEl.textContent, start:new Date(), end:null, cmd:[], act:[], volt:[]};
@@ -445,8 +448,8 @@
       const name=`Run ${i+1}: ${run.regulator||'n/a'} — ${(run.startPressure||0).toFixed(3)}→${(run.endPressure||0).toFixed(3)} MPa`;
       run.trace.name=name;
       run.trace.hovertemplate=run.sensor==='scale'
-        ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`
-        : `${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`;
+        ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<br>%{customdata:.3f} MPa<extra></extra>`
+        : `${name}<br>%{y:.1f} pps at %{x:.1f}s<br>%{customdata:.3f} MPa<extra></extra>`;
       run.trace.line.shape = interpEl.checked?'spline':'linear';
       Plotly.restyle(chartDiv,{name:run.trace.name,hovertemplate:run.trace.hovertemplate,"line.shape":run.trace.line.shape},[i+2]);
     });

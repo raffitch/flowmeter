@@ -289,9 +289,11 @@ class FlowServer:
                     self.target_weight = (
                         float(weight_val) if isinstance(weight_val, (int, float)) and weight_val > 0 else None
                     )
-                    self.target_seconds = (
-                        float(seconds_val) if isinstance(seconds_val, (int, float)) and seconds_val > 0 else None
-                    )
+                    try:
+                        seconds_f = float(seconds_val)
+                    except (TypeError, ValueError):
+                        seconds_f = None
+                    self.target_seconds = seconds_f if seconds_f and seconds_f > 0 else None
                     await ws.send(json.dumps({"type":"ack","status":"started"}))
 
                 # ---- stop calibration ----

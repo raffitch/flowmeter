@@ -10,261 +10,366 @@
   button {padding:.6rem 1.2rem;font-size:1rem;margin:.25rem}
   #result{margin-top:1rem;font-size:1.2rem;color:#0a7900}
   #status{margin:.8rem 0;font-size:.95rem;color:#555}
-  canvas {width:100%;max-height:260px;margin-top:1rem;border:1px solid #ccc}
+  #chart {width:100%;height:260px;margin-top:1rem;border:1px solid #ccc}
 </style>
-
-<!-- Chart.js v3 (no plugins) -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>window.PlotlyConfig={};</script>
+<script src="https://cdn.plot.ly/plotly-2.31.0.min.js"></script>
 </head>
 <body>
 <h1>Flow-sensor calibration</h1>
 
 <div id="status">Connecting…</div>
 
-<div>Pulses counted</div>
-<div id="pulse"  class="big">0</div>
+<div>
+  Sensor <select id="sensor">
+    <option value="flow">Flowmeter</option>
+    <option value="scale">Scale</option>
+  </select>
+</div>
+
+<div id="pulsesBox">
+  <div>Pulses counted</div>
+  <div id="pulses" class="big">0</div>
+</div>
+
+<div id="weightBox" style="display:none">
+  <div>Weight (g)</div>
+  <div id="weight" class="big">0</div>
+</div>
 
 <div>Elapsed time</div>
-<div id="timer" class="big">0.0&nbsp;s</div>
+<div id="elapsed" class="big">0.0 s</div>
 
-<div>Volume (L) <input id="volume" type="number" min="0.1" step="0.1" value="1" style="width:4em"></div>
-<div>Regulator setting <input id="regSetting" type="text" style="width:6em"></div>
-<div>Supply pressure <input id="supplyPressure" type="text" style="width:6em"></div>
+<div id="avgBox">
+  <div>Average pulses / s</div>
+  <div id="avg" class="big">0</div>
+</div>
 
-<button id="start"  disabled>Start</button>
-<button id="stop"   disabled>Stop</button>
-<button id="reset"  disabled>Reset pulses</button>
+<div>Regulator version <input id="reg" type="text" style="width:6em"></div>
+<div>Supply pressure (MPa) <input id="press" type="text" style="width:6em"></div>
+<div id="limitPulse">Stop after pulses <input id="targetP" type="number" min="1" step="1" style="width:6em"></div>
+<div id="limitWeight" style="display:none">Stop at weight (g) <input id="targetW" type="number" min="1" step="1" style="width:6em"></div>
+<div>Stop after seconds <input id="targetS" type="number" min="1" step="1" style="width:6em"></div>
+<div><label><input id="autoStop" type="checkbox" checked> auto-stop when value stops changing</label></div>
+
+<button id="start" disabled>Start</button>
+<button id="stop" disabled>Stop</button>
+<button id="reset" disabled>Reset</button>
 <button id="resetAll" disabled>Reset all</button>
 <button id="saveCsv" disabled>Save CSV</button>
 <button id="savePng" disabled>Save PNG</button>
 
-<canvas id="flowChart"></canvas>
+<div id="chart"></div>
 
 <div id="result"></div>
-<ul id="logList"></ul>
+<ul id="log"></ul>
 
 <script>
 (() => {
-  /* --- Configurable filter strength (0.0 – 1.0) --- */
-  const ALPHA = 0.5;     // 0.25 ≈ keep 75 % of new value
+  const MEDIAN_WINDOW = 3;
+  const MA_WINDOW = 3;
+  const EMA_ALPHA = 0.7;
+  const VOLUME_L = 1;
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function beep(freq,dur){
+    const o=audioCtx.createOscillator();
+    o.frequency.value=freq; o.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+dur/1000);
+  }
 
-  /* --- DOM refs --- */
   const $ = id => document.getElementById(id);
-  const statusEl=$('status'), pulseEl=$('pulse'), timerEl=$('timer'),
-        resultEl=$('result'), startBtn=$('start'), stopBtn=$('stop'),
-        resetBtn=$('reset'), resetAllBtn=$('resetAll'),
+  const statusEl=$('status'), sensorEl=$('sensor'),
+        pulsesEl=$('pulses'), weightEl=$('weight'), elapsedEl=$('elapsed'),
+        avgEl=$('avg'), regEl=$('reg'), pressEl=$('press'),
+        targetPEl=$('targetP'), targetWEl=$('targetW'), targetSEl=$('targetS'),
+        startBtn=$('start'), stopBtn=$('stop'), resetBtn=$('reset'), resetAllBtn=$('resetAll'),
         saveCsvBtn=$('saveCsv'), savePngBtn=$('savePng'),
-        volumeEl=$('volume'), regEl=$('regSetting'), pressureEl=$('supplyPressure'),
-        chartCtx=$('flowChart'), logList=$('logList');
+        pulsesBox=$('pulsesBox'), weightBox=$('weightBox'), avgBox=$('avgBox'),
+        limitPulse=$('limitPulse'), limitWeight=$('limitWeight'),
+        autoStopEl=$('autoStop'), chartDiv=$('chart'), logEl=$('log'),
+        resultEl=$('result'), avgLabel=avgBox.firstElementChild;
 
-  /* --- Chart.js (rolling WINDOW_SEC‑second window) --- */
-  const WINDOW_SEC = 90;        // adjust to change graph width
-  const flowChart  = new Chart(chartCtx,{
-    type:'line',
-    data:{datasets:[]},
-    options:{
-      animation:false,
-      scales:{
-        x:{type:'linear',title:{display:true,text:'time (s)'},
-           min:0,max:WINDOW_SEC},
-        y:{beginAtZero:true,title:{display:true,text:'pulses / s'}}
-      },
-      plugins:{legend:{display:true}}
-    }
-  });
-
-  /* --- run-time state --- */
-  let armed=false,running=false,startPending=false;
-  let t0=0;
-  let lastPulse=0,lastTime=performance.now(),lastChange=performance.now();
-  let filtPps = null;            // holds the filtered value
-  const runs=[];                 // store all runs
-  let currentRun=null;           // {dataset, volume, regulator, pressure, start,end}
-  let globalMax=0;
-  const NO_FLOW_MS = 3000;    // wait longer before auto-stop
-
-  /* --- helpers: downloads --- */
-  function downloadCsv(){
-    if(!runs.length){alert('No data yet');return;}
-    let csv='';
-    runs.forEach((r,i)=>{
-      csv+=`# run=${i+1}\n`;
-      if(r.start) csv+=`# start=${r.start.toISOString()}\n`;
-      if(r.end)   csv+=`# end=${r.end.toISOString()}\n`;
-      csv+=`# volume_L=${r.volume}\n`;
-      csv+=`# regulator_setting=${r.regulator}\n`;
-      csv+=`# supply_pressure=${r.pressure}\n`;
-      csv+='time_s,pps_filtered\n';
-      r.dataset.data.forEach(p=>csv+=`${p.x},${p.y}\n`);
-      csv+='\n';
-    });
-    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-    Object.assign(document.createElement('a'),{href:url,download:'flow_curves.csv'}).click();
-    URL.revokeObjectURL(url);
+  let sensor = 'flow';
+  function updateSensor() {
+    sensor = sensorEl.value;
+    const isFlow = sensor === 'flow';
+    pulsesBox.style.display  = isFlow ? '' : 'none';
+    avgBox.style.display     = '';
+    avgLabel.textContent     = isFlow ? 'Average pulses / s' : 'Average L/s';
+    limitPulse.style.display = isFlow ? '' : 'none';
+    weightBox.style.display  = isFlow ? 'none' : '';
+    limitWeight.style.display= isFlow ? 'none' : '';
+    resetBtn.textContent     = isFlow ? 'Reset pulses' : 'Tare scale';
+    Plotly.relayout(chartDiv, {yaxis:{title:isFlow?'pulses / s':'L / s', rangemode:'tozero'}});
   }
-  function downloadPng(){
-    const url=flowChart.toBase64Image('image/png');
-    Object.assign(document.createElement('a'),{href:url,download:'flow_chart.png'}).click();
-  }
+  sensorEl.onchange = updateSensor;
 
-  function addLogItem(run){
-    const li=document.createElement('li');
-    const duration=(run.elapsed??0).toFixed(1);
-    const ppl=(run.ppl??0).toFixed(1);
-    li.textContent=`${run.start?.toLocaleString()} — ${duration}s, ${ppl} pulses/L`;
-    logList.appendChild(li);
-  }
+  Plotly.newPlot(chartDiv, [], {
+    xaxis:{title:'time (s)', range:[0,90]},
+    yaxis:{title:'pulses / s', rangemode:'tozero'},
+    margin:{l:40,r:10,b:40,t:10}
+  }, {responsive:true, displaylogo:false, scrollZoom:true});
 
-  function newRun(){
-    const hue=(runs.length*60)%360;
-    const ds={
-      label:`Run ${runs.length+1}`,
-      data:[],
-      borderColor:`hsl(${hue},70%,40%)`,
-      backgroundColor:`hsla(${hue},70%,40%,.1)`,
-      borderWidth:1,
-      tension:.25,
-      pointRadius:0
-    };
-    flowChart.data.datasets.push(ds);
-    flowChart.update('none');
-    currentRun={dataset:ds,volume:volumeEl.value,regulator:regEl.value,pressure:pressureEl.value,start:null,end:null};
-    runs.push(currentRun);
-  }
+  updateSensor();
+
+  let armed=false, running=false, startPend=false, waitingReset=false;
+  let pendingHardClear=false;
+  let lastPulse=0, lastWeight=0, lastMillis=0;
+  let startPulse=0;
+  let t0=0, lastChange=0;
+  let filt=null, ema=null;
+  const rawBuf=[], avgBuf=[];
+  const runs=[];
+  let current=null;
+  let xMax=0;
+  let startWeight=0;
+
   function softReset(){
-    pulseEl.textContent='0';
-    timerEl.textContent='0.0 s';
-    resultEl.textContent='';
-    armed=running=false; startPending=false;
-    lastPulse=0; lastTime=performance.now();
-    if(currentRun && !currentRun.end) currentRun.end=new Date();
-    currentRun=null;
+    pulsesEl.textContent='0';
+    weightEl.textContent='0';
+    elapsedEl.textContent='0.0 s';
+    avgEl.textContent='0';
+    ema=filt=null; rawBuf.length=0; avgBuf.length=0;
+    armed=running=startPend=false; waitingReset=false;
+    lastPulse=0; lastWeight=0; lastMillis=0; startWeight=0;
+    if(current && !current.end) current.end=new Date();
+    current=null;
+    startBtn.disabled=false;
+    stopBtn.disabled=true;
   }
   function hardReset(){
     softReset();
     runs.length=0;
-    flowChart.data.datasets.length=0;
-    flowChart.update('none');
-    logList.innerHTML='';
-    globalMax=0;
+    Plotly.react(chartDiv, [], {xaxis:{title:'time (s)',range:[0,90]},yaxis:{title:'pulses / s',rangemode:'tozero'},margin:{l:40,r:10,b:40,t:10}}, {responsive:true, displaylogo:false, scrollZoom:true});
+    logEl.innerHTML='';
+    xMax=0;
   }
 
-  /* --- WebSocket to Python bridge --- */
-  const ws=new WebSocket('ws://localhost:8765');
-  ws.onopen =()=>statusEl.textContent='🟢 WebSocket open';
-  ws.onerror=()=>statusEl.textContent='🔴 WebSocket error';
+  const ws = new WebSocket('ws://localhost:8765');
+  ws.onopen = () => {
+    statusEl.textContent='🟢 WebSocket open';
+    startBtn.disabled=false;
+    resetBtn.disabled=false;
+    resetAllBtn.disabled=false;
+    saveCsvBtn.disabled=false;
+    savePngBtn.disabled=false;
+  };
+  ws.onerror= () => { statusEl.textContent='🔴 WebSocket error'; };
+  ws.onclose= () => {
+    statusEl.textContent='🔴 WebSocket closed';
+    startBtn.disabled=true; stopBtn.disabled=true; resetBtn.disabled=true;
+    resetAllBtn.disabled=true; saveCsvBtn.disabled=true; savePngBtn.disabled=true;
+  };
 
-  ws.onmessage=e=>{
-    const d=JSON.parse(e.data);
-    const now=performance.now();
+  ws.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    const now = performance.now();
 
-    /* 1️⃣ live frame ----------------------------------------------------- */
     if(d.type==='live'){
-      const pulses=d.pulses;
-      pulseEl.textContent=pulses;
+      if(waitingReset){
+        lastPulse=d.pulses; lastWeight=d.weight; lastMillis=d.millis;
+        return;
+      }
 
-      /* arm->running transition on first pulse */
-      if(armed && !running && pulses!==lastPulse){
-        if(startPending){
-          newRun();
-          currentRun.start=new Date();
-          startPending=false;
+      const dispP = d.pulses - startPulse;
+      pulsesEl.textContent = dispP >= 0 ? dispP : 0;
+      if(d.weight!=null) weightEl.textContent=d.weight.toFixed(1);
+
+      if(sensor==='scale'){
+        if(running && current){
+          const dt = lastMillis ? (d.millis - lastMillis)/1000 : 0;
+          if(dt>0){
+            const inst = (d.weight - lastWeight)/dt/1000;
+            rawBuf.push(inst); if(rawBuf.length>MEDIAN_WINDOW) rawBuf.shift();
+            const mid=[...rawBuf].sort((a,b)=>a-b)[Math.floor(rawBuf.length/2)];
+            avgBuf.push(mid); if(avgBuf.length>MA_WINDOW) avgBuf.shift();
+            const m=avgBuf.reduce((a,b)=>a+b,0)/avgBuf.length;
+            ema=ema===null?m:EMA_ALPHA*m+(1-EMA_ALPHA)*ema;
+            let rate = ema || 0;
+            if (rate < 0 || Object.is(rate, -0)) rate = 0;
+            const t=(now-t0)/1000;
+            addPoint(t, rate);
+            avgEl.textContent=rate.toFixed(3);
+          }
         }
-        running=true; t0=now; lastChange=now; filtPps=null;
-      }
-
-      /* raw instantaneous pps */
-      const dt=(now-lastTime)/1000;
-      if(dt>0 && pulses!==lastPulse){
-        const rawPps=(pulses-lastPulse)/dt;
-
-        /* --- exponential smoothing ------------------------------------ */
-        if(filtPps===null) filtPps=rawPps;          // initialise
-        else filtPps = ALPHA*rawPps + (1-ALPHA)*filtPps;
-
-        /* plot --------------------------------------------------------- */
-
-        if(running && currentRun && now>t0){
-          const t=(now-t0)/1000;
-
-          const pts=currentRun.dataset.data;
-          pts.push({x:t,y:filtPps});
-          if(t>globalMax) globalMax=t;
-          flowChart.options.scales.x.max=Math.max(WINDOW_SEC,globalMax);
-          flowChart.update('none');
+        if(d.weight!==lastWeight) lastChange=now;
+      }else{
+        const dt = lastMillis ? (d.millis - lastMillis)/1000 : 0;
+        if (d.pulses < lastPulse) {
+          rawBuf.length=0; avgBuf.length=0; ema=null; filt=0;
+          avgEl.textContent='0';
+          lastPulse=d.pulses; lastMillis=d.millis;
+          return;
         }
+        if(dt>0 && d.pulses!==lastPulse){
+          const raw=(d.pulses-lastPulse)/dt;
+          rawBuf.push(raw); if(rawBuf.length>MEDIAN_WINDOW) rawBuf.shift();
+          const mid=[...rawBuf].sort((a,b)=>a-b)[Math.floor(rawBuf.length/2)];
+          avgBuf.push(mid); if(avgBuf.length>MA_WINDOW) avgBuf.shift();
+          const m=avgBuf.reduce((a,b)=>a+b,0)/avgBuf.length;
+          ema=ema===null?m:EMA_ALPHA*m+(1-EMA_ALPHA)*ema;
+          filt = ema || 0;
+          if (filt < 0 || Object.is(filt, -0)) filt = 0;
+          avgEl.textContent=filt.toFixed(1);
+          if(running && current){
+            const t=(now-t0)/1000;
+            addPoint(t,filt);
+          }
+        }
+        if(d.pulses!==lastPulse) lastChange=now;
       }
 
-      if(pulses!==lastPulse) lastChange=now;
-      if(running) timerEl.textContent=`${((now-t0)/1000).toFixed(1)} s`;
-
-      /* auto-stop after NO_FLOW_MS of zero-increment */
-      if(running && now-lastChange>NO_FLOW_MS){
-        ws.send('stop'); armed=running=false; startPending=false;
+      if(autoStopEl.checked && running && now-lastChange>800){
+        ws.send('stop');
+        running=false; startPend=false; armed=false;
+        beep(500,300);
+        startBtn.disabled=false; stopBtn.disabled=true;
       }
+      if(running) elapsedEl.textContent=((now-t0)/1000).toFixed(1)+' s';
 
-      lastPulse=pulses; lastTime=now;
+      lastPulse=d.pulses; lastWeight=d.weight; lastMillis=d.millis;
     }
 
-    /* 2️⃣ status messages ---------------------------------------------- */
     if(d.type==='status'){
-      if(d.msg==='serial-open'){
-        statusEl.textContent='🟢 Serial link ready';
-        startBtn.disabled=resetBtn.disabled=resetAllBtn.disabled=false;
-        saveCsvBtn.disabled=savePngBtn.disabled=false;
-      }
-      if(d.msg==='counter-reset'){
-        const wasPending=startPending;
+      if(d.msg==='reset'){
+        resultEl.textContent = sensor==='scale' ? 'Scale tared' : 'Counter reset';
         softReset();
-        resultEl.textContent='Counter reset ✔︎';
-        if(wasPending){
-          armed=true; startPending=true;
-          startBtn.disabled=true; stopBtn.disabled=false;
-        }
+        if(pendingHardClear){ hardReset(); pendingHardClear=false; }
+      }
+      if(d.msg==='esp-disconnected'){
+        statusEl.textContent='🔴 ESP disconnected';
+      }
+      if(d.msg==='serial-open'){
+        statusEl.textContent='🟢 ESP connected';
+      }
+      if(d.msg==='client-connected'){
+        statusEl.textContent='🟢 WebSocket open';
+      }
+      if(d.msg==='client-disconnected'){
+        statusEl.textContent='🔴 WebSocket closed';
       }
     }
 
-    /* 3️⃣ acknowledgements --------------------------------------------- */
-    if(d.type==='ack'){
-        if(d.status==='started'){
-          armed=true; running=false; startPending=true;
-          lastTime=lastChange=performance.now();
-          lastPulse=0;
-          timerEl.textContent='0.0 s'; resultEl.textContent='';
-          startBtn.disabled=true; stopBtn.disabled=false;
-        }
-      if(d.status==='reset-sent'){resultEl.textContent='Reset request sent…';}
+    if(d.type==='ack' && d.status==='started'){
+      softReset();
+      armed=running=true;
+      startPend=false;
+      t0=now; lastChange=now;
+      newRun();
+      startBtn.disabled=true;
+      stopBtn.disabled=false;
     }
 
-    /* 4️⃣ calibration result ------------------------------------------- */
     if(d.type==='cal'){
-      armed=running=false;
-      startBtn.disabled=false; stopBtn.disabled=true;
-
-      if(currentRun){
-        Object.assign(currentRun,{end:new Date(),delta:d.delta,elapsed:d.elapsed,ppl:d.ppl});
-        addLogItem(currentRun);
-        currentRun=null;
-      }
-      startPending=false;
-
-      timerEl.textContent=`${d.elapsed.toFixed(1)} s`;
-      resultEl.innerHTML=`<strong>${d.ppl}</strong> pulses / L (vol=${d.volume}L)<br>
-                          (Δ=${d.delta} pulses in ${d.elapsed}s)`;
+      armed=running=false; startPend=false;
+      startBtn.disabled=false;
+      stopBtn.disabled=true;
+      beep(500,300);
+      elapsedEl.textContent=d.elapsed.toFixed(1)+' s';
+      if(current){ Object.assign(current,{end:new Date(),delta:d.delta,elapsed:d.elapsed,pps:d.pps,rate:d.rate,sensor:d.sensor}); addLog(current); current=null; }
+      if(d.sensor==='scale'){ resultEl.textContent=(d.rate/1000).toFixed(3)+' L/s'; }
+      else { resultEl.textContent=d.pps+' pps'; }
     }
   };
 
-  /* --- button handlers --- */
-  startBtn.onclick =()=>{
-    ws.send(JSON.stringify({cmd:'start',volume:Number(volumeEl.value)}));
+  function addPoint(t,y){
+    current.trace.x.push(t); current.trace.y.push(y);
+    if(t>xMax){ xMax=t; Plotly.relayout(chartDiv,{"xaxis.range":[0,Math.max(90,xMax)]}); }
+    Plotly.extendTraces(chartDiv,{x:[[t]],y:[[y]]},[current.idx]);
+  }
+  function newRun(){
+    const hue=(runs.length*60)%360;
+    const name=`Run ${runs.length+1}: ${regEl.value||'n/a'} — ${pressEl.value||'n/a'} MPa`;
+    const trace={x:[],y:[],mode:'lines',line:{color:`hsl(${hue},70%,40%)`},name:name,hovertemplate:sensor==='scale'?`${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`:`${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`};
+    Plotly.addTraces(chartDiv, trace);
+    current={idx:chartDiv.data.length-1, trace:trace, sensor:sensor, volume:VOLUME_L, regulator:regEl.value, pressure:pressEl.value, start:new Date(), end:null};
+    runs.push(current);
+  }
+  function addLog(r){
+    const li=document.createElement('li');
+    const dur=(r.elapsed||0).toFixed(1);
+    const txt=r.sensor==='scale'
+      ? `${r.start.toLocaleString()} — ${dur}s, ${(r.rate/1000||0).toFixed(3)} L/s (${r.delta.toFixed(1)} g)`
+      : `${r.start.toLocaleString()} — ${dur}s, ${(r.pps||0).toFixed(1)} pps (${r.delta} pulses)`;
+    li.append(txt,' ');
+    const del=document.createElement('button');
+    del.textContent='Delete';
+    del.onclick=()=>removeRun(r);
+    li.appendChild(del);
+    logEl.appendChild(li);
+    r.li=li;
+  }
+
+  function removeRun(r){
+    const idx=runs.indexOf(r);
+    if(idx===-1) return;
+    Plotly.deleteTraces(chartDiv,[r.idx]);
+    runs.splice(idx,1);
+    if(r.li) r.li.remove();
+    runs.forEach((run,i)=>{
+      run.idx=i;
+      const name=`Run ${i+1}: ${run.regulator||'n/a'} — ${run.pressure||'n/a'} MPa`;
+      run.trace.name=name;
+      run.trace.hovertemplate=run.sensor==='scale'
+        ? `${name}<br>%{y:.3f} L/s at %{x:.1f}s<extra></extra>`
+        : `${name}<br>%{y:.1f} pps at %{x:.1f}s<extra></extra>`;
+      Plotly.restyle(chartDiv,{name:run.trace.name,hovertemplate:run.trace.hovertemplate},[i]);
+    });
+  }
+
+  startBtn.onclick = () => {
+    startPulse = lastPulse;
+    startBtn.disabled=true;
+    stopBtn.disabled=false;
+    waitingReset=true;
+    softReset();
+    beep(800,200);
+    ws.send(JSON.stringify({cmd:'start',volume:VOLUME_L,sensor:sensor,pulses:sensor==='flow'&&targetPEl.value?Number(targetPEl.value):undefined,weight:sensor==='scale'&&targetWEl.value?Number(targetWEl.value):undefined,seconds:targetSEl.value?Number(targetSEl.value):undefined}));
   };
-  stopBtn.onclick  =()=>{ws.send('stop');armed=running=false;startPending=false;};
-  resetBtn.onclick =()=>ws.send('reset');
-  resetAllBtn.onclick=()=>{ws.send('reset');hardReset();};
-  saveCsvBtn.onclick=downloadCsv;
-  savePngBtn.onclick=downloadPng;
+  stopBtn.onclick = () => {
+    ws.send('stop');
+    running=false; startPend=false; armed=false;
+    beep(500,300);
+    startBtn.disabled=false; stopBtn.disabled=true;
+  };
+  resetBtn.onclick = () => {
+    waitingReset=true;
+    startPulse=0;
+    softReset();
+    ws.send('reset');
+  };
+  resetAllBtn.onclick = () => {
+    waitingReset = true;
+    pendingHardClear = true;
+    startPulse = 0;
+    softReset();
+    ws.send('reset');
+  };
+  saveCsvBtn.onclick = () => { downloadCsv(); };
+  savePngBtn.onclick = () => { Plotly.toImage(chartDiv,{format:'png'}).then(url=>{Object.assign(document.createElement('a'),{href:url,download:'flow_chart.png'}).click();}); };
+
+  function downloadCsv(){
+    if(!runs.length){ alert('No data yet'); return; }
+    const times=Array.from(new Set(runs.flatMap(r=>r.trace.x))).sort((a,b)=>a-b);
+    let header='time_s';
+    runs.forEach((r,i)=>{ header+=`,run ${i+1} - ${r.pressure||'n/a'}MPa`; });
+    const rows=[header];
+    times.forEach(t=>{
+      const row=[t];
+      runs.forEach(r=>{
+        const idx=r.trace.x.indexOf(t);
+        row.push(idx>-1?r.trace.y[idx]:'');
+      });
+      rows.push(row.join(','));
+    });
+    let meta='';
+    runs.forEach((r,i)=>{ meta+=`# run${i+1}_pulses=${r.delta}\n`; });
+    const csv=meta+rows.join('\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    Object.assign(document.createElement('a'),{href:url,download:'flow_curves.csv'}).click();
+    URL.revokeObjectURL(url);
+  }
 })();
 </script>
-
 </body>
 </html>
